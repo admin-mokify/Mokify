@@ -6,6 +6,12 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["--yes", "http-server", "-p", "5500", "-c-1", "."],
       "port": 5500
+    },
+    {
+      "name": "mokify-static-alt",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["--yes", "http-server", "-p", "5501", "-c-1", "."],
+      "port": 5501
     }
   ]
 }

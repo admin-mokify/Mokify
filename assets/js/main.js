@@ -4,57 +4,12 @@ document.addEventListener('DOMContentLoaded', () => {
   initMobileNav();
   initPasswordToggles();
   initRoleSwitch();
-  initRevealOnScroll();
-  initHeaderShadow();
-  initScrolly();
+  initSectionReveal();
+  initTransparentHeader();
 });
 
-function initScrolly() {
-  const root = document.getElementById('scrolly');
-  if (!root || !('IntersectionObserver' in window)) return;
-
-  const steps = Array.from(root.querySelectorAll('.scrolly-step'));
-  const scenes = Array.from(root.querySelectorAll('.scrolly-scene'));
-  const dots = Array.from(root.querySelectorAll('.scrolly-progress .dot'));
-  const symbolIds = ['scene-login', 'scene-match', 'scene-learn'];
-  if (!steps.length) return;
-
-  const setActive = (index) => {
-    steps.forEach((el, i) => el.classList.toggle('is-active', i === index));
-    scenes.forEach((el, i) => el.classList.toggle('is-active', i === index));
-    dots.forEach((el, i) => el.classList.toggle('is-active', i === index));
-    // Accent strokes live inside <symbol> defs, which IntersectionObserver
-    // can never see directly (no layout of their own) — draw them in here,
-    // the moment their scene becomes active, instead.
-    const symbol = document.getElementById(symbolIds[index]);
-    symbol?.querySelectorAll('.draw-in-path').forEach((el) => el.classList.add('is-visible'));
-  };
-
-  setActive(0);
-
-  const io = new IntersectionObserver(
-    (entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          setActive(Number(entry.target.dataset.step));
-        }
-      });
-    },
-    { rootMargin: '-45% 0px -45% 0px', threshold: 0 }
-  );
-
-  steps.forEach((el) => io.observe(el));
-}
-
-function initHeaderShadow() {
-  const header = document.querySelector('.site-header');
-  if (!header) return;
-  const onScroll = () => header.classList.toggle('is-scrolled', window.scrollY > 8);
-  onScroll();
-  window.addEventListener('scroll', onScroll, { passive: true });
-}
-
 function initMobileNav() {
+  const header = document.querySelector('.site-header');
   const toggle = document.querySelector('.nav-toggle');
   const menu = document.querySelector('.mobile-menu');
   if (!toggle || !menu) return;
@@ -62,12 +17,16 @@ function initMobileNav() {
   toggle.addEventListener('click', () => {
     const isOpen = menu.classList.toggle('is-open');
     toggle.setAttribute('aria-expanded', String(isOpen));
+    // Relax the header's full pill radius while the dropdown is open, so the
+    // now-tall island reads as a rounded panel instead of a stretched capsule.
+    header?.classList.toggle('nav-open', isOpen);
   });
 
   menu.querySelectorAll('a').forEach((link) => {
     link.addEventListener('click', () => {
       menu.classList.remove('is-open');
       toggle.setAttribute('aria-expanded', 'false');
+      header?.classList.remove('nav-open');
     });
   });
 }
@@ -99,29 +58,74 @@ function initRoleSwitch() {
   });
 }
 
-function initRevealOnScroll() {
-  const targets = document.querySelectorAll('[data-reveal], [data-reveal-draw]');
-  if (!targets.length) return;
+function initTransparentHeader() {
+  const header = document.querySelector('.site-header--transparent');
+  if (!header) return;
+
+  const onScroll = () => {
+    header.classList.toggle('is-scrolled', window.scrollY > 40);
+  };
+
+  onScroll();
+  window.addEventListener('scroll', onScroll, { passive: true });
+}
+
+// Each <section>'s reveal elements track a continuous --reveal-progress
+// (0-1) instead of a binary on/off: it's how much of that section is
+// currently visible (0 = just touching the viewport edge, 1 = the whole
+// section — or as much of it as can fit — is on screen). A light scroll
+// that only grazes a section barely nudges it in; scrolling until the
+// whole section is showing brings it fully in. Set on the <section> via
+// a scroll/resize-driven rAF loop, it inherits down into every
+// [data-reveal] descendant, so this is O(sections) per frame, not
+// O(reveal elements).
+function initSectionReveal() {
+  const allTargets = document.querySelectorAll('[data-reveal], [data-reveal-draw]');
+  if (!allTargets.length) return;
 
   const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (prefersReduced || !('IntersectionObserver' in window)) {
-    targets.forEach((el) => el.classList.add('is-visible'));
+  if (prefersReduced) {
+    allTargets.forEach((el) => el.style.setProperty('--reveal-progress', 1));
     return;
   }
 
-  const io = new IntersectionObserver(
-    (entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('is-visible');
-          io.unobserve(entry.target);
-        }
-      });
-    },
-    { threshold: 0.15 }
-  );
+  const sections = Array.from(document.querySelectorAll('main > section'));
+  if (!sections.length) {
+    // No <section> wrappers on this page (e.g. the 404 shell) — nothing to
+    // scrub against, so just reveal everything once.
+    allTargets.forEach((el) => el.style.setProperty('--reveal-progress', 1));
+    return;
+  }
 
-  targets.forEach((el) => io.observe(el));
+  let ticking = false;
+
+  const updateProgress = () => {
+    ticking = false;
+    const viewportHeight = window.innerHeight;
+    sections.forEach((section) => {
+      const rect = section.getBoundingClientRect();
+      const visibleHeight = Math.max(0, Math.min(rect.bottom, viewportHeight) - Math.max(rect.top, 0));
+      const denom = Math.min(rect.height, viewportHeight) || 1;
+      const linear = Math.min(1, Math.max(0, visibleHeight / denom));
+      // Cubic ease-in: raw visibility climbs roughly linearly, but a
+      // section barely poking into view (e.g. 50% visible) should still
+      // read as clearly hidden, not already half-revealed — this keeps
+      // early progress small and saves the dramatic reveal for once the
+      // section is substantially on screen.
+      const eased = linear * linear * linear;
+      section.style.setProperty('--reveal-progress', eased.toFixed(3));
+    });
+  };
+
+  const requestUpdate = () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(updateProgress);
+  };
+
+  updateProgress();
+  window.addEventListener('scroll', requestUpdate, { passive: true });
+  window.addEventListener('resize', requestUpdate);
 }
 
 // Front-end-only form handling for the auth shell (no backend yet).
