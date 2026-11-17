@@ -27,8 +27,8 @@ const MEET_SYNC_NUDGED_MS = 5000;
 const MEET_FAST_FOR_MS = 8000;
 const MEET_CHAT_MAX_LENGTH = 1000;
 const MEET_DEVICES_KEY = 'mokify.meet.devices';
-// Relay passwords are handed out for six hours; fetch new ones well before.
-const MEET_RELAY_FRESH_MS = 3 * 60 * 60 * 1000;
+// Relay passwords are handed out for two hours; fetch new ones well before.
+const MEET_RELAY_FRESH_MS = 60 * 60 * 1000;
 
 const MEET_ERRORS = {
   signed_out: 'Prisijunk iš naujo, kad galėtum tęsti.',
@@ -56,6 +56,7 @@ const MEET_ENDINGS = {
   denied: { title: 'Organizatorius tavęs neįleido' },
   replaced: { title: 'Susitikimą atidarei kitame lange', text: 'Vienu metu susitikime gali būti tik viename lange.', rejoin: true },
   no_relay: { title: 'Susitikimai šiuo metu neveikia', text: 'Nepavyko paruošti saugaus ryšio tarp dalyvių. Pabandyk vėliau.' },
+  relay_limit: { title: 'Vaizdo skambučiai laikinai neprieinami', text: 'Pasiektas šio mėnesio vaizdo skambučių limitas. Jie vėl veiks po kelių dienų.' },
   inactive: { title: 'Susitikimai neprieinami', text: MEET_ERRORS.inactive },
   disabled: { title: 'Susitikimai laikinai išjungti', text: 'Pabandyk vėliau.' },
 };
@@ -853,11 +854,12 @@ function initMeetings() {
     localMediaChanged();
   });
 
-  // Fewer people: sharper picture. More people: smaller, so every browser
-  // and connection keeps up.
+  // More people: smaller picture, so every browser and connection keeps up.
+  // Lessons (two people) get the same picture as small meetings rather than
+  // 720p: it is plenty for talking and showing a notebook, and the relay's
+  // free monthly data then lasts more than twice as many lesson hours.
   function qualityLevel() {
     const count = peers.size + 1;
-    if (count <= 2) return { width: 1280, height: 720, fps: 24, kbps: 1200 };
     if (count <= 4) return { width: 640, height: 360, fps: 24, kbps: 500 };
     return { width: 480, height: 270, fps: 20, kbps: 300 };
   }
@@ -1020,6 +1022,7 @@ function initMeetings() {
   // null when there is no relay: the call then doesn't start at all, rather
   // than quietly connecting browsers directly. (Only on a developer's own
   // computer, where there is no such server, are direct connections used.)
+  let relayLimitReached = false;
   async function loadRelay() {
     try {
       // The login is renewed first if it is about to run out.
@@ -1030,6 +1033,7 @@ function initMeetings() {
         body: JSON.stringify({ code }),
       });
       const data = res.ok ? await res.json() : null;
+      relayLimitReached = Boolean(data && data.limit === true);
       const servers = data && data.relay === true && Array.isArray(data.iceServers)
         ? data.iceServers.map((server) => ({
           urls: [].concat(server && server.urls).filter((url) => typeof url === 'string' && /^turns?:/.test(url)),
@@ -1079,7 +1083,7 @@ function initMeetings() {
     ice = await loadRelay();
     if (phase !== 'call') return;
     if (!ice) {
-      finish('no_relay', { tellServer: true });
+      finish(relayLimitReached ? 'relay_limit' : 'no_relay', { tellServer: true });
       return;
     }
     syncSoon(0);
