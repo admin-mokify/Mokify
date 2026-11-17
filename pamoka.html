@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="lt" class="no-js">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pamoka — Mokify</title>
+<meta name="description" content="Vaizdo pamoka su mokytoju arba mokiniu.">
+<meta name="robots" content="noindex">
+<link rel="icon" href="assets/img/logo-mark.png">
+<link rel="stylesheet" href="assets/css/style.css">
+<script>document.documentElement.classList.replace('no-js','js');</script>
+<script>/* Only for logged-in students. The lesson comes along through the login. */ try { if (!localStorage.getItem('mokify.session')) { var k = (/[?&]k=([A-Za-z0-9-]{1,40})/.exec(location.search) || [])[1]; location.replace('prisijungti.html?next=' + encodeURIComponent('pamoka.html' + (k ? '?k=' + k : ''))); } } catch (e) {}</script>
+</head>
+<body class="paper">
+
+<a class="skip-link" href="#main">Praleisti ir pereiti prie turinio</a>
+
+<header class="site-header">
+  <div class="container">
+    <div class="nav-shell">
+      <a href="index.html" class="brand">
+        <img src="assets/img/logo-mark.png" alt="" width="30" height="30">
+        Mokify
+      </a>
+
+      <nav class="nav-links" aria-label="Pagrindinis meniu">
+        <a href="kaip-veikia.html">Kaip veikia</a>
+        <a href="mokykloms.html">Mokykloms</a>
+        <a href="pagalba.html">Pagalba</a>
+      </nav>
+
+      <div class="nav-actions">
+        <div class="nav-cta-group">
+          <a href="prisijungti.html" class="btn btn-ghost">Prisijungti</a>
+          <a href="registracija.html" class="btn btn-primary">Pradėti</a>
+        </div>
+        <button class="nav-toggle" aria-label="Atidaryti meniu" aria-expanded="false" aria-controls="mobile-menu">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="mobile-menu" id="mobile-menu">
+      <a href="kaip-veikia.html">Kaip veikia</a>
+      <a href="mokykloms.html">Mokykloms</a>
+      <a href="pagalba.html">Pagalba</a>
+      <a href="prisijungti.html">Prisijungti</a>
+      <a href="registracija.html" class="btn btn-primary btn-block">Pradėti</a>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+
+  <section class="section auth meet-section">
+    <div class="container">
+      <!-- A lesson: the same call as a meeting (assets/js/meet.js), between
+           one teacher and one student, opened from their chat. -->
+      <div class="meet" id="meet" data-kind="lesson">
+
+        <!-- Before coming in: check camera and microphone, see who the lesson is with -->
+        <div class="meet-lobby" id="meet-lobby" hidden>
+          <div class="meet-preview">
+            <div class="meet-tile is-self" id="lobby-tile">
+              <video class="meet-tile-video" id="lobby-video" autoplay playsinline muted hidden></video>
+              <div class="meet-tile-paper">
+                <span class="avatar-frame"><img id="lobby-avatar" src="assets/img/default-avatar.svg" alt="" width="96" height="96"></span>
+              </div>
+            </div>
+
+            <div class="meet-preview-controls">
+              <button type="button" class="meet-btn meet-btn--device" id="lobby-mic" aria-pressed="false" aria-label="Įjungti mikrofoną" title="Įjungti mikrofoną">
+                <svg class="icon-on" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+                <svg class="icon-off" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="2" x2="22" y1="2" y2="22"/><path d="M18.89 13.23A7.12 7.12 0 0 0 19 12v-2"/><path d="M5 10v2a7 7 0 0 0 12 5"/><path d="M15 9.34V5a3 3 0 0 0-5.68-1.33"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+              </button>
+              <button type="button" class="meet-btn meet-btn--device" id="lobby-cam" aria-pressed="false" aria-label="Įjungti kamerą" title="Įjungti kamerą">
+                <svg class="icon-on" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2" ry="2"/></svg>
+                <svg class="icon-off" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.66 6H14a2 2 0 0 1 2 2v2.34l1 1L22 8v8"/><path d="M16 16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2l10 10Z"/><line x1="2" x2="22" y1="2" y2="22"/></svg>
+              </button>
+              <button type="button" class="meet-btn" id="lobby-settings" aria-label="Kameros ir mikrofono nustatymai" title="Kameros ir mikrofono nustatymai">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="2" x2="6" y1="14" y2="14"/><line x1="10" x2="14" y1="8" y2="8"/><line x1="18" x2="22" y1="16" y2="16"/></svg>
+              </button>
+            </div>
+
+            <p class="form-error" id="lobby-media-error" role="alert"></p>
+          </div>
+
+          <div class="auth-card meet-lobby-info">
+            <h1 class="meet-lobby-title" id="lobby-title" tabindex="-1">Kraunama…</h1>
+
+            <div class="meet-host" id="lobby-host" hidden>
+              <span class="avatar-frame"><img id="lobby-host-avatar" src="assets/img/default-avatar.svg" alt="" width="56" height="56"></span>
+              <div class="meet-host-text">
+                <p class="meet-host-name" id="lobby-host-name"></p>
+                <p class="text-muted" id="lobby-host-meta"></p>
+              </div>
+            </div>
+
+            <p class="meet-lobby-status" id="lobby-status" role="status" hidden></p>
+            <p class="form-error" id="lobby-error" role="alert"></p>
+
+            <div class="account-edit-actions">
+              <button type="button" class="btn btn-primary" id="lobby-join" hidden>Prisijungti</button>
+              <button type="button" class="btn btn-ghost" id="lobby-cancel" hidden>Atšaukti prašymą</button>
+              <a class="btn btn-ghost" href="zinutes.html" id="lobby-back">Į žinutes</a>
+            </div>
+          </div>
+        </div>
+
+        <!-- The call -->
+        <div class="meet-call" id="meet-call" hidden>
+          <header class="meet-top">
+            <img class="meet-top-logo" src="assets/img/logo-mark.png" alt="Mokify" width="30" height="30">
+            <h1 class="meet-top-title" id="call-title" tabindex="-1">Pamoka</h1>
+          </header>
+
+          <div class="meet-body" id="call-body">
+            <div class="meet-stage" id="call-stage">
+              <div class="meet-notice" id="call-sharing" hidden>
+                <p>Kiti dalyviai mato tavo ekraną.</p>
+                <button type="button" class="btn btn-ghost btn-sm" id="call-sharing-stop">Neberodyti ekrano</button>
+              </div>
+              <div class="meet-notice is-warning" id="call-late" role="status" hidden>
+                <p id="call-late-text"></p>
+                <button type="button" class="btn btn-ghost btn-sm" id="call-late-cancel" hidden>Atšaukti pamoką</button>
+              </div>
+              <div class="meet-notice is-warning" id="call-offline" role="status" hidden>
+                <p>Ryšys nutrūko. Bandoma prisijungti iš naujo…</p>
+              </div>
+              <div class="meet-notice" id="call-sound" hidden>
+                <p>Naršyklė neleido įjungti garso.</p>
+                <button type="button" class="btn btn-primary btn-sm" id="call-sound-on">Įjungti garsą</button>
+              </div>
+
+              <div class="meet-spot" id="call-spot" hidden></div>
+              <div class="meet-grid" id="call-grid"></div>
+
+              <div class="meet-invite" id="call-invite" hidden>
+                <p class="meet-invite-text" id="call-invite-text">Kol kas čia esi tik tu.</p>
+              </div>
+
+              <ul class="meet-knocks" id="call-knocks" aria-label="Nori prisijungti"></ul>
+              <div class="meet-toasts" id="call-toasts" role="status" aria-live="polite"></div>
+            </div>
+
+            <aside class="meet-panel" id="call-panel" hidden>
+              <div class="meet-panel-view" id="panel-people" hidden>
+                <div class="meet-panel-head">
+                  <h2 id="panel-people-title" tabindex="-1">Dalyviai</h2>
+                  <button type="button" class="chat-menu-toggle" data-close-panel aria-label="Uždaryti">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                  </button>
+                </div>
+                <div class="meet-panel-scroll" id="panel-people-scroll">
+                  <ul class="meet-people" id="panel-people-list"></ul>
+                </div>
+              </div>
+
+              <div class="meet-panel-view" id="panel-chat" hidden>
+                <div class="meet-panel-head">
+                  <h2 id="panel-chat-title" tabindex="-1">Pokalbis</h2>
+                  <button type="button" class="chat-menu-toggle" data-close-panel aria-label="Uždaryti">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                  </button>
+                </div>
+                <ol class="chat-messages meet-chat" id="call-chat" aria-live="polite"></ol>
+                <form class="chat-composer" id="call-chat-form" novalidate>
+                  <label class="sr-only" for="call-chat-input">Žinutė</label>
+                  <textarea class="field-control" id="call-chat-input" name="body" rows="1" maxlength="1000" placeholder="Rašyk žinutę…" autocomplete="off"></textarea>
+                  <button type="submit" class="btn btn-primary" id="call-chat-send">Siųsti</button>
+                </form>
+                <p class="form-error" id="call-chat-error" role="alert"></p>
+              </div>
+            </aside>
+          </div>
+
+          <footer class="meet-bar">
+            <div class="meet-bar-group">
+              <button type="button" class="meet-btn meet-btn--device" id="call-mic" aria-pressed="false" aria-label="Įjungti mikrofoną" title="Įjungti mikrofoną">
+                <svg class="icon-on" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+                <svg class="icon-off" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="2" x2="22" y1="2" y2="22"/><path d="M18.89 13.23A7.12 7.12 0 0 0 19 12v-2"/><path d="M5 10v2a7 7 0 0 0 12 5"/><path d="M15 9.34V5a3 3 0 0 0-5.68-1.33"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+              </button>
+              <button type="button" class="meet-btn meet-btn--device" id="call-cam" aria-pressed="false" aria-label="Įjungti kamerą" title="Įjungti kamerą">
+                <svg class="icon-on" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2" ry="2"/></svg>
+                <svg class="icon-off" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.66 6H14a2 2 0 0 1 2 2v2.34l1 1L22 8v8"/><path d="M16 16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2l10 10Z"/><line x1="2" x2="22" y1="2" y2="22"/></svg>
+              </button>
+              <button type="button" class="meet-btn meet-btn--toggle" id="call-screen" aria-pressed="false" aria-label="Rodyti ekraną" title="Rodyti ekraną" hidden>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/><path d="m9 10 3-3 3 3"/><path d="M12 13V7"/></svg>
+              </button>
+              <button type="button" class="meet-btn meet-btn--hand" id="call-hand" aria-pressed="false" aria-label="Pakelti ranką" title="Pakelti ranką">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg>
+              </button>
+            </div>
+
+            <div class="meet-bar-group">
+              <button type="button" class="meet-btn meet-btn--toggle" id="call-chat-toggle" aria-pressed="false" aria-label="Pokalbis" title="Pokalbis" aria-controls="call-panel">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <span class="meet-btn-count" id="call-chat-count" hidden></span>
+              </button>
+              <button type="button" class="meet-btn meet-btn--toggle" id="call-people-toggle" aria-pressed="false" aria-label="Dalyviai" title="Dalyviai" aria-controls="call-panel">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                <span class="meet-btn-count" id="call-people-count" hidden></span>
+              </button>
+              <button type="button" class="meet-btn" id="call-settings" aria-label="Kameros ir mikrofono nustatymai" title="Kameros ir mikrofono nustatymai">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="2" x2="6" y1="14" y2="14"/><line x1="10" x2="14" y1="8" y2="8"/><line x1="18" x2="22" y1="16" y2="16"/></svg>
+              </button>
+            </div>
+
+            <button type="button" class="btn btn-danger meet-leave" id="call-leave">Išeiti</button>
+          </footer>
+        </div>
+
+        <!-- After the call, or when it can't be entered -->
+        <div class="auth-card meet-done" id="meet-done" hidden>
+          <h1 class="meet-lobby-title" id="done-title" tabindex="-1"></h1>
+          <p id="done-text"></p>
+          <div class="account-edit-actions">
+            <button type="button" class="btn btn-primary" id="done-rejoin" hidden>Grįžti į susitikimą</button>
+            <a class="btn btn-ghost" href="zinutes.html" id="done-home">Į žinutes</a>
+          </div>
+        </div>
+
+        <!-- Organizer leaving: step out, or end it for everyone -->
+        <dialog class="confirm-dialog meet-dialog-wide" id="leave-dialog" aria-labelledby="leave-title">
+          <form method="dialog" class="auth-form">
+            <h2 class="account-edit-title" id="leave-title">Išeiti iš pamokos?</h2>
+            <p>Šią pamoką vedi tu. Gali ją baigti arba tik išeiti ir vėliau sugrįžti.</p>
+            <p class="form-error" id="leave-error" role="alert"></p>
+            <div class="account-edit-actions">
+              <button type="button" class="btn btn-danger" id="leave-end">Baigti pamoką</button>
+              <button type="button" class="btn btn-ghost" id="leave-only">Tik išeiti</button>
+              <button type="submit" class="btn btn-ghost" autofocus>Likti</button>
+            </div>
+          </form>
+        </dialog>
+
+        <!-- The lesson ended because someone was late -->
+        <dialog class="confirm-dialog" id="late-dialog" aria-labelledby="late-dialog-title">
+          <form method="dialog" class="auth-form">
+            <h2 class="account-edit-title" id="late-dialog-title">Pamoka baigta</h2>
+            <p id="late-dialog-text"></p>
+            <div class="account-edit-actions">
+              <button type="submit" class="btn btn-primary" autofocus>Supratau</button>
+            </div>
+          </form>
+        </dialog>
+
+        <!-- A warning with one red button (removing someone, ending a meeting) -->
+        <dialog class="confirm-dialog" id="meet-confirm" aria-labelledby="meet-confirm-title">
+          <form method="dialog" class="auth-form">
+            <h2 class="account-edit-title" id="meet-confirm-title"></h2>
+            <p id="meet-confirm-text"></p>
+            <p class="form-error" id="meet-confirm-error" role="alert"></p>
+            <div class="account-edit-actions">
+              <button type="button" class="btn btn-danger" id="meet-confirm-ok"></button>
+              <button type="submit" class="btn btn-ghost" autofocus>Atšaukti</button>
+            </div>
+          </form>
+        </dialog>
+
+        <!-- Reporting a participant to Mokify -->
+        <dialog class="confirm-dialog" id="report-dialog" aria-labelledby="report-title">
+          <form class="auth-form" id="report-form" novalidate>
+            <h2 class="account-edit-title" id="report-title">Pranešti apie dalyvį</h2>
+            <p id="report-who"></p>
+            <fieldset class="form-section field" id="report-reason-field">
+              <legend class="form-section-title">Kas nutiko?</legend>
+              <div class="subject-grid subject-grid--stacked">
+                <label class="subject-option"><input type="radio" name="reason" value="bullying">Tyčiojasi arba įžeidinėja</label>
+                <label class="subject-option"><input type="radio" name="reason" value="inappropriate">Rodo arba kalba netinkamus dalykus</label>
+                <label class="subject-option"><input type="radio" name="reason" value="stranger">Manau, kad tai ne tas žmogus, kuriuo prisistato</label>
+                <label class="subject-option"><input type="radio" name="reason" value="other">Kita</label>
+              </div>
+              <p class="field-error" id="report-reason-error"></p>
+            </fieldset>
+            <div class="field">
+              <label class="field-label" for="report-details">Papasakok plačiau (nebūtina)</label>
+              <textarea class="field-control" id="report-details" name="details" rows="3" maxlength="1000"></textarea>
+            </div>
+            <p class="form-error" id="report-error" role="alert"></p>
+            <div class="account-edit-actions">
+              <button type="submit" class="btn btn-danger" id="report-send">Pranešti</button>
+              <button type="button" class="btn btn-ghost" id="report-cancel">Atšaukti</button>
+            </div>
+          </form>
+          <div class="auth-form" id="report-done" hidden>
+            <h2 class="account-edit-title" id="report-done-title" tabindex="-1">Pranešimas išsiųstas</h2>
+            <p>Mokify komanda jį peržiūrės. Šis dalyvis nesužinos, kad apie jį pranešei.</p>
+            <div class="account-edit-actions">
+              <button type="button" class="btn btn-ghost" id="report-close">Uždaryti</button>
+            </div>
+          </div>
+        </dialog>
+
+        <!-- Choosing the camera, microphone and speaker -->
+        <dialog class="confirm-dialog" id="devices-dialog" aria-labelledby="devices-title">
+          <form method="dialog" class="auth-form">
+            <h2 class="account-edit-title" id="devices-title">Kamera ir mikrofonas</h2>
+            <div class="field">
+              <label class="field-label" for="device-mic">Mikrofonas</label>
+              <select class="field-control" id="device-mic"></select>
+            </div>
+            <div class="field">
+              <label class="field-label" for="device-cam">Kamera</label>
+              <select class="field-control" id="device-cam"></select>
+            </div>
+            <div class="field" id="device-speaker-field" hidden>
+              <label class="field-label" for="device-speaker">Garsiakalbis</label>
+              <select class="field-control" id="device-speaker"></select>
+            </div>
+            <p class="form-error" id="devices-error" role="alert"></p>
+            <div class="account-edit-actions">
+              <button type="submit" class="btn btn-ghost" autofocus>Uždaryti</button>
+            </div>
+          </form>
+        </dialog>
+
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div>
+        <a href="index.html" class="brand">
+          <img src="assets/img/logo-mark.png" alt="" width="30" height="30">
+          Mokify
+        </a>
+        <p class="text-muted mt-4" style="max-width:32ch;">Platforma, kurioje moksleiviai mokosi vieni iš kitų.</p>
+      </div>
+
+      <div class="footer-cols">
+        <h4>Platforma</h4>
+        <ul>
+          <li><a href="kaip-veikia.html">Kaip veikia</a></li>
+          <li><a href="mokykloms.html">Mokykloms</a></li>
+          <li><a href="moksleiviams.html">Moksleiviams</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-cols">
+        <h4>Paskyra</h4>
+        <ul>
+          <li><a href="prisijungti.html">Prisijungti</a></li>
+          <li><a href="registracija.html">Registruotis</a></li>
+          <li><a href="pagalba.html">Pagalba</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-cols">
+        <h4>Sekite mus</h4>
+        <div class="social-row">
+          <a href="https://www.tiktok.com/@mokify_lt" aria-label="Mokify TikTok">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M16.6 5.82s.51.5 0 0A4.278 4.278 0 0 1 15.54 3h-3.09v12.4a2.592 2.592 0 0 1-2.59 2.5c-1.42 0-2.6-1.16-2.6-2.6 0-1.72 1.66-3.01 3.37-2.48V9.66c-3.45-.46-6.47 2.22-6.47 5.64 0 3.33 2.76 5.7 5.69 5.7 3.14 0 5.69-2.55 5.69-5.7V9.01a7.35 7.35 0 0 0 4.3 1.38V7.3s-1.88.09-3.24-1.48Z"/></svg>
+          </a>
+          <a href="https://www.facebook.com/profile.php?id=61591806752446" aria-label="Mokify Facebook">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M13.5 21v-7.5H16l.5-3h-3V8.25c0-.87.24-1.46 1.5-1.46H16.5V4.14C16.24 4.1 15.35 4 14.31 4 12.14 4 10.65 5.32 10.65 7.7v2.8H8.15v3h2.5V21Z"/></svg>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <span>© 2026 Mokify. Visos teisės saugomos.</span>
+      <span>Sukurta Lietuvai 🇱🇹</span>
+    </div>
+  </div>
+</footer>
+
+<!-- Pieces the call builds on screen: a participant's picture, a row in the
+     participant list, and a request to come in. -->
+<template id="tpl-tile">
+  <div class="meet-tile">
+    <video class="meet-tile-video" autoplay playsinline muted hidden></video>
+    <div class="meet-tile-paper">
+      <span class="avatar-frame"><img src="assets/img/default-avatar.svg" alt="" width="96" height="96"></span>
+    </div>
+    <p class="meet-tile-status" hidden></p>
+    <span class="meet-tile-hand" hidden>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg>
+      <span class="sr-only">Pakėlė ranką</span>
+    </span>
+    <button type="button" class="meet-tile-pin" aria-pressed="false" aria-label="Padidinti" title="Padidinti">
+      <svg class="icon-off" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" x2="14" y1="3" y2="10"/><line x1="3" x2="10" y1="21" y2="14"/></svg>
+      <svg class="icon-on" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" x2="21" y1="10" y2="3"/><line x1="3" x2="10" y1="21" y2="14"/></svg>
+    </button>
+    <p class="meet-tile-caption">
+      <svg class="meet-tile-muted" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="2" x2="22" y1="2" y2="22"/><path d="M18.89 13.23A7.12 7.12 0 0 0 19 12v-2"/><path d="M5 10v2a7 7 0 0 0 12 5"/><path d="M15 9.34V5a3 3 0 0 0-5.68-1.33"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+      <span class="meet-tile-name"></span>
+    </p>
+  </div>
+</template>
+
+<template id="tpl-person">
+  <li class="meet-person">
+    <span class="avatar-frame"><img src="assets/img/default-avatar.svg" alt="" width="40" height="40"></span>
+    <span class="meet-person-text">
+      <span class="meet-person-name"></span>
+      <span class="meet-person-meta text-muted"></span>
+    </span>
+    <span class="meet-person-state">
+      <svg class="meet-person-hand" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" hidden><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg>
+      <svg class="meet-person-muted" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" hidden><line x1="2" x2="22" y1="2" y2="22"/><path d="M18.89 13.23A7.12 7.12 0 0 0 19 12v-2"/><path d="M5 10v2a7 7 0 0 0 12 5"/><path d="M15 9.34V5a3 3 0 0 0-5.68-1.33"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+    </span>
+    <div class="chat-menu">
+      <button type="button" class="chat-menu-toggle" aria-label="Veiksmai" aria-haspopup="menu" aria-expanded="false">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+      </button>
+      <div class="chat-menu-list" role="menu" hidden></div>
+    </div>
+  </li>
+</template>
+
+<template id="tpl-knock">
+  <li class="meet-knock">
+    <span class="avatar-frame"><img src="assets/img/default-avatar.svg" alt="" width="48" height="48"></span>
+    <div class="meet-knock-text">
+      <p class="meet-knock-name"></p>
+      <p class="meet-knock-meta text-muted"></p>
+    </div>
+    <div class="meet-knock-actions">
+      <button type="button" class="btn btn-primary btn-sm" data-admit>Įleisti</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-deny>Neįleisti</button>
+    </div>
+  </li>
+</template>
+
+<script src="assets/js/config.js"></script>
+<script src="assets/js/main.js"></script>
+<script src="assets/js/meet.js"></script>
+</body>
+</html>
