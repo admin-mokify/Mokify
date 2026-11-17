@@ -1,0 +1,60 @@
+# Security headers, read by Cloudflare Pages.
+#
+# Content-Security-Policy only lets the browser run this site's own scripts,
+# so even if someone slipped HTML into a name or message, it couldn't run.
+# The small inline <script> blocks at the top of the pages are allowed by
+# their exact hash. If you change one of them, its page guard stops running
+# until the hash below is updated (the browser console names the new hash).
+#   sha256-dNdl...  every page: no-js -> js
+#   sha256-gNEr...  mokytojai.html: log in first
+#   sha256-aTe+...  prisijungti.html, registracija.html: already logged in
+#   sha256-DxZ8...  tapti-mokytoju.html: log in first
+#   sha256-coQp...  zinutes.html: log in first
+#   sha256-kJVY...  susitikimai.html: log in first
+#   sha256-T8BL...  pamoka.html: log in first
+#   sha256-6a/y...  tikrinimas.html: log in first (in its own policy below)
+# connect-src must name the Supabase address from assets/js/config.js twice:
+# with https:// for the database, and with wss:// for the live channel that
+# tells an open meeting there is news (Supabase Realtime).
+
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-dNdlBplWR5bDZDI+YCKolkPPL27/gS/a7SNuPT2Lg0A=' 'sha256-gNErPQNFHnPV6E21y/i1vcerqZ7iQcV1hk/wL8290Iw=' 'sha256-aTe+duQfxwseG47G0/v3OGxdlnVvpR8CJ892EWSSVUE=' 'sha256-DxZ8bphmntGBWUwZoi4Mcw5nF0glV0/n88AvjVS1kXc=' 'sha256-coQpCj39+gsPChai8I7wuQVJtQ+rMlLIHy81Ncooiy4=' 'sha256-kJVYAtI8BxNsALvkC9bdj4OoEnwsUO8QrNIfhQeZ45I=' 'sha256-T8BLNf9ajZBFEcnas/0Q1vjc+GdSOS/A5KRMtr50ZYY='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://wswryravelakztdkiysq.supabase.co wss://wswryravelakztdkiysq.supabase.co; object-src 'none'; frame-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), display-capture=(), geolocation=(), payment=(), usb=()
+  Strict-Transport-Security: max-age=31536000
+  Cross-Origin-Opener-Policy: same-origin
+
+# Meetings and lessons are the only pages that may use the camera, the
+# microphone and screen sharing. On every other page they stay switched off
+# for any script.
+# ("! Name" takes back the site-wide line above, so the two don't add up.)
+/pamoka
+  ! Permissions-Policy
+  Permissions-Policy: camera=(self), microphone=(self), display-capture=(self), geolocation=(), payment=(), usb=()
+/pamoka.html
+  ! Permissions-Policy
+  Permissions-Policy: camera=(self), microphone=(self), display-capture=(self), geolocation=(), payment=(), usb=()
+/susitikimai
+  ! Permissions-Policy
+  Permissions-Policy: camera=(self), microphone=(self), display-capture=(self), geolocation=(), payment=(), usb=()
+/susitikimai.html
+  ! Permissions-Policy
+  Permissions-Policy: camera=(self), microphone=(self), display-capture=(self), geolocation=(), payment=(), usb=()
+
+# The document review page shows uploaded PDFs inside the page, which needs
+# frame-src blob: (a file it downloaded itself); everything else as above.
+# If the Supabase address changes, change it here too.
+/tikrinimas
+  ! Content-Security-Policy
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-dNdlBplWR5bDZDI+YCKolkPPL27/gS/a7SNuPT2Lg0A=' 'sha256-6a/yg0HfvnQk10vkulm7S7GOWaFQvADQZc8lQu/Skfs='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://wswryravelakztdkiysq.supabase.co wss://wswryravelakztdkiysq.supabase.co; object-src 'none'; frame-src blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests
+/tikrinimas.html
+  ! Content-Security-Policy
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-dNdlBplWR5bDZDI+YCKolkPPL27/gS/a7SNuPT2Lg0A=' 'sha256-6a/yg0HfvnQk10vkulm7S7GOWaFQvADQZc8lQu/Skfs='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://wswryravelakztdkiysq.supabase.co wss://wswryravelakztdkiysq.supabase.co; object-src 'none'; frame-src blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests
+
+# Database setup notes and dev config aren't secret, but keep them out of search results.
+/supabase/*
+  X-Robots-Tag: noindex, nofollow
+/.claude/*
+  X-Robots-Tag: noindex, nofollow

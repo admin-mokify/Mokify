@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="lt" class="no-js">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Žinutės — Mokify</title>
+<meta name="description" content="Tavo pokalbiai su kitais moksleiviais.">
+<meta name="robots" content="noindex">
+<link rel="icon" href="assets/img/logo-mark.png">
+<link rel="stylesheet" href="assets/css/style.css">
+<script>document.documentElement.classList.replace('no-js','js');</script>
+<script>/* Only for logged-in students. */ try { if (!localStorage.getItem('mokify.session')) location.replace('prisijungti.html?next=zinutes.html'); } catch (e) {}</script>
+</head>
+<body class="paper">
+
+<a class="skip-link" href="#main">Praleisti ir pereiti prie turinio</a>
+
+<header class="site-header">
+  <div class="container">
+    <div class="nav-shell">
+      <a href="index.html" class="brand">
+        <img src="assets/img/logo-mark.png" alt="" width="30" height="30">
+        Mokify
+      </a>
+
+      <nav class="nav-links" aria-label="Pagrindinis meniu">
+        <a href="pagalba.html">Pagalba</a>
+      </nav>
+
+      <div class="nav-actions">
+        <div class="nav-cta-group">
+          <a href="prisijungti.html" class="btn btn-ghost">Prisijungti</a>
+          <a href="registracija.html" class="btn btn-primary">Pradėti</a>
+        </div>
+        <button class="nav-toggle" aria-label="Atidaryti meniu" aria-expanded="false" aria-controls="mobile-menu">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="mobile-menu" id="mobile-menu">
+      <a href="pagalba.html">Pagalba</a>
+      <a href="prisijungti.html">Prisijungti</a>
+      <a href="registracija.html" class="btn btn-primary btn-block">Pradėti</a>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+
+  <section class="section auth chat-section">
+    <div class="container">
+      <div class="chat" id="chat">
+
+        <div class="chat-sidebar">
+          <h1 class="chat-title">Žinutės</h1>
+          <ul class="chat-list" id="chat-list" aria-label="Pokalbiai"></ul>
+          <div class="chat-list-empty" id="chat-list-empty" hidden>
+            <p id="chat-list-empty-text">Kraunama…</p>
+            <a href="mokytojai.html" class="btn btn-primary btn-sm" id="chat-find" hidden>Rask mokytoją</a>
+          </div>
+        </div>
+
+        <section class="chat-thread" id="chat-thread" aria-labelledby="chat-partner-name">
+          <div class="chat-thread-none" id="chat-none">
+            <p>Pasirink pokalbį.</p>
+          </div>
+
+          <div class="chat-thread-body" id="chat-open" hidden>
+            <header class="chat-thread-head">
+              <button type="button" class="chat-back" id="chat-back" aria-label="Atgal į pokalbius">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+              </button>
+              <button type="button" class="chat-partner" id="chat-partner-open" aria-haspopup="dialog">
+                <span class="avatar-frame">
+                  <img id="chat-partner-avatar" src="assets/img/default-avatar.svg" alt="" width="44" height="44">
+                </span>
+                <span class="chat-thread-who">
+                  <span class="chat-partner-name" id="chat-partner-name"></span>
+                  <span class="text-muted chat-partner-username" id="chat-partner-username"></span>
+                </span>
+              </button>
+
+              <button type="button" class="chat-menu-toggle" id="chat-meet" aria-label="Pakviesti į pamoką dabar" title="Pakviesti į pamoką dabar" hidden>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2" ry="2"/></svg>
+              </button>
+              <button type="button" class="chat-menu-toggle" id="chat-plan" aria-label="Suplanuoti pamoką" title="Suplanuoti pamoką" aria-haspopup="dialog" hidden>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
+              </button>
+
+              <div class="chat-menu">
+                <button type="button" class="chat-menu-toggle" id="chat-menu-toggle" aria-label="Daugiau veiksmų" aria-haspopup="menu" aria-expanded="false" aria-controls="chat-menu">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+                </button>
+                <div class="chat-menu-list" id="chat-menu" role="menu" hidden>
+                  <button type="button" role="menuitem" id="chat-hide">Ištrinti pokalbį</button>
+                  <button type="button" role="menuitem" class="is-danger" id="chat-block">Užblokuoti</button>
+                </div>
+              </div>
+            </header>
+
+            <div class="chat-lesson-next" id="chat-lesson-next" role="status" hidden></div>
+
+            <ol class="chat-messages" id="chat-messages" aria-live="polite"></ol>
+
+            <form class="chat-composer" id="chat-composer" novalidate>
+              <label class="sr-only" for="chat-input">Žinutė</label>
+              <textarea class="field-control" id="chat-input" name="body" rows="1" maxlength="2000" placeholder="Rašyk žinutę…" autocomplete="off"></textarea>
+              <button type="submit" class="btn btn-primary" id="chat-send">Siųsti</button>
+            </form>
+            <p class="chat-closed" id="chat-closed" hidden></p>
+            <p class="form-error" id="chat-error" role="alert"></p>
+          </div>
+        </section>
+
+        <dialog class="confirm-dialog profile-dialog" id="profile-dialog" aria-labelledby="profile-name">
+          <div class="profile-dialog-body">
+            <div class="account-head">
+              <div class="avatar-frame avatar-frame--lg">
+                <img id="profile-avatar" src="assets/img/default-avatar.svg" alt="" width="112" height="112">
+              </div>
+              <div class="account-title">
+                <div class="account-name-row">
+                  <h2 id="profile-name"></h2>
+                  <span class="teacher-mark" id="profile-teacher-mark" hidden>Registruotas mokytojas</span>
+                </div>
+                <p class="text-muted" id="profile-username"></p>
+              </div>
+            </div>
+
+            <p class="account-bio" id="profile-bio" hidden></p>
+            <p class="form-error" id="profile-error" role="alert"></p>
+
+            <dl class="account-details" id="profile-details"></dl>
+
+            <form method="dialog" class="account-edit-actions">
+              <button type="submit" class="btn btn-ghost" autofocus>Uždaryti</button>
+            </form>
+          </div>
+        </dialog>
+
+        <dialog class="confirm-dialog" id="lesson-dialog" aria-labelledby="lesson-dialog-title">
+          <form class="auth-form" id="lesson-form" novalidate>
+            <h2 class="account-edit-title" id="lesson-dialog-title">Suplanuoti pamoką</h2>
+            <p id="lesson-dialog-text"></p>
+            <div class="field">
+              <label class="field-label" for="lesson-date">Diena</label>
+              <input class="field-control" type="date" id="lesson-date" name="date" required>
+            </div>
+            <div class="field">
+              <label class="field-label" for="lesson-time">Laikas</label>
+              <input class="field-control" type="time" id="lesson-time" name="time" step="300" required>
+            </div>
+            <p class="form-error" id="lesson-error" role="alert"></p>
+            <div class="account-edit-actions">
+              <button type="submit" class="btn btn-primary" id="lesson-send">Pasiūlyti laiką</button>
+              <button type="button" class="btn btn-ghost" id="lesson-cancel">Atšaukti</button>
+            </div>
+          </form>
+          <div class="auth-form" id="lesson-busy" hidden>
+            <h2 class="account-edit-title" id="lesson-busy-title"></h2>
+            <p id="lesson-busy-text"></p>
+            <p class="form-error" id="lesson-busy-error" role="alert"></p>
+            <div class="account-edit-actions" id="lesson-busy-actions"></div>
+          </div>
+        </dialog>
+
+        <dialog class="confirm-dialog" id="chat-confirm" aria-labelledby="chat-confirm-title">
+          <form method="dialog" class="auth-form">
+            <h2 class="account-edit-title" id="chat-confirm-title"></h2>
+            <p id="chat-confirm-text"></p>
+            <p class="form-error" id="chat-confirm-error" role="alert"></p>
+            <div class="account-edit-actions">
+              <button type="button" class="btn btn-danger" id="chat-confirm-ok"></button>
+              <button type="submit" class="btn btn-ghost" autofocus>Atšaukti</button>
+            </div>
+          </form>
+        </dialog>
+
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div>
+        <a href="index.html" class="brand">
+          <img src="assets/img/logo-mark.png" alt="" width="30" height="30">
+          Mokify
+        </a>
+        <p class="text-muted mt-4" style="max-width:32ch;">Platforma, kurioje moksleiviai mokosi vieni iš kitų.</p>
+      </div>
+
+      <div class="footer-cols">
+        <h4>Paskyra</h4>
+        <ul>
+          <li><a href="prisijungti.html">Prisijungti</a></li>
+          <li><a href="registracija.html">Registruotis</a></li>
+          <li><a href="pagalba.html">Pagalba</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-cols">
+        <h4>Sekite mus</h4>
+        <div class="social-row">
+          <a href="https://www.tiktok.com/@mokify_lt" aria-label="Mokify TikTok">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M16.6 5.82s.51.5 0 0A4.278 4.278 0 0 1 15.54 3h-3.09v12.4a2.592 2.592 0 0 1-2.59 2.5c-1.42 0-2.6-1.16-2.6-2.6 0-1.72 1.66-3.01 3.37-2.48V9.66c-3.45-.46-6.47 2.22-6.47 5.64 0 3.33 2.76 5.7 5.69 5.7 3.14 0 5.69-2.55 5.69-5.7V9.01a7.35 7.35 0 0 0 4.3 1.38V7.3s-1.88.09-3.24-1.48Z"/></svg>
+          </a>
+          <a href="https://www.facebook.com/profile.php?id=61591806752446" aria-label="Mokify Facebook">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M13.5 21v-7.5H16l.5-3h-3V8.25c0-.87.24-1.46 1.5-1.46H16.5V4.14C16.24 4.1 15.35 4 14.31 4 12.14 4 10.65 5.32 10.65 7.7v2.8H8.15v3h2.5V21Z"/></svg>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <span>© 2026 Mokify. Visos teisės saugomos.</span>
+      <span>Sukurta Lietuvai 🇱🇹</span>
+    </div>
+  </div>
+</footer>
+
+<script src="assets/js/config.js"></script>
+<script src="assets/js/main.js"></script>
+</body>
+</html>
