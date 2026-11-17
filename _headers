@@ -59,3 +59,11 @@
   X-Robots-Tag: noindex, nofollow
 /.claude/*
   X-Robots-Tag: noindex, nofollow
+
+# Scripts and styles: browsers check for a newer version on every visit (a
+# quick "not changed" answer when there is none). Otherwise they reuse a saved
+# copy for hours, and a page could run with an old script after an update.
+/assets/js/*
+  Cache-Control: no-cache
+/assets/css/*
+  Cache-Control: no-cache
