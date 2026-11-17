@@ -854,12 +854,12 @@ function initMeetings() {
     localMediaChanged();
   });
 
-  // More people: smaller picture, so every browser and connection keeps up.
-  // Lessons (two people) get the same picture as small meetings rather than
-  // 720p: it is plenty for talking and showing a notebook, and the relay's
-  // free monthly data then lasts more than twice as many lesson hours.
+  // Fewer people: sharper picture. More people: smaller, so every browser
+  // and connection keeps up. (Two people at 720p use about 1.1 GB of the
+  // relay's free monthly data an hour; see functions/api/ice.js.)
   function qualityLevel() {
     const count = peers.size + 1;
+    if (count <= 2) return { width: 1280, height: 720, fps: 24, kbps: 1200 };
     if (count <= 4) return { width: 640, height: 360, fps: 24, kbps: 500 };
     return { width: 480, height: 270, fps: 20, kbps: 300 };
   }
@@ -1068,7 +1068,10 @@ function initMeetings() {
     setPhase('call');
     callTitle.textContent = (info && info.title) || WORDS.title;
     if (lessonMode) $('call-invite-text').textContent = lesson ? `Kol kas čia esi tik tu. ${lesson.partner.name} dar neprisijungė.` : 'Kol kas čia esi tik tu.';
-    else $('call-invite-link').textContent = inviteUrl();
+    else {
+      $('call-invite-link').textContent = inviteUrl();
+      $('call-invite-code').textContent = `Kodas: ${formatMeetingCode(code)}`;
+    }
     offlineNotice.hidden = true;
     soundNotice.hidden = true;
     selfTile = makeTile({ self: true });
@@ -2388,20 +2391,29 @@ function initMeetings() {
     }));
   }
 
-  if ($('call-copy')) $('call-copy').addEventListener('click', async (e) => {
-    const button = e.currentTarget;
-    try {
-      await navigator.clipboard.writeText(inviteUrl());
-      button.textContent = 'Nuoroda nukopijuota';
-      window.clearTimeout(button.resetTimer);
-      button.resetTimer = window.setTimeout(() => {
-        button.textContent = 'Kopijuoti nuorodą';
-      }, 2500);
-    } catch {
-      // No clipboard access: show the link so it can be copied by hand.
-      window.prompt('Nukopijuok susitikimo nuorodą:', inviteUrl());
-    }
-  });
+  // The link opens the meeting; the code is for typing into "Susitikimo kodas
+  // arba nuoroda" on the meetings page.
+  // (Each button has a long label and a short one for phones.)
+  function copyButton(id, value, ask) {
+    const button = $(id);
+    if (!button) return;
+    const labels = [...button.childNodes];
+    button.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(value());
+        button.textContent = 'Nukopijuota';
+        window.clearTimeout(button.resetTimer);
+        button.resetTimer = window.setTimeout(() => {
+          button.replaceChildren(...labels);
+        }, 2500);
+      } catch {
+        // No clipboard access: show it so it can be copied by hand.
+        window.prompt(ask, value());
+      }
+    });
+  }
+  copyButton('call-copy', inviteUrl, 'Nukopijuok susitikimo nuorodą:');
+  copyButton('call-copy-code', () => formatMeetingCode(code), 'Nukopijuok susitikimo kodą:');
 
   // Closing the tab or moving to another page: tell the database right away
   // (otherwise it notices after 30 seconds) and let the camera go.

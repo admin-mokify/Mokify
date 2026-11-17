@@ -365,6 +365,11 @@ h3, .h3 {
 @media (min-width: 1100px) {
   .signed-in .site-header { max-width: 940px; }
 }
+/* Logged out, the menu has only Pagalba: a smaller island, with the link
+   next to the buttons instead of alone in the middle. Widen it again when
+   the Kaip veikia / Mokykloms / Moksleiviams pages are added. */
+:root:not(.signed-in) .site-header { max-width: 600px; }
+:root:not(.signed-in) .nav-links { margin-left: auto; }
 
 /* Dark-glass variant floating over a full-bleed hero photo, until scrolled */
 .site-header--transparent:not(.is-scrolled) {
@@ -1961,8 +1966,8 @@ textarea.field-control { min-height: 96px; resize: vertical; line-height: 1.5; }
   background: var(--ink-900);
 }
 .meet-tile-video[hidden] { display: none; }
-/* Your own camera is shown like a mirror. */
-.meet-tile.is-self .meet-tile-video { transform: scaleX(-1); }
+/* Your own camera is shown as the others see it, not mirrored, so text held
+   up to it (a textbook, a notebook) reads the right way round. */
 .meet-tile--screen .meet-tile-video { object-fit: contain; }
 
 /* Camera off: ruled paper with the red margin line. */
@@ -2154,6 +2159,8 @@ html.in-meeting .skip-link { display: none; }
   z-index: 50;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
+  /* Never wider than the screen: a long meeting name is cut short instead. */
+  grid-template-columns: minmax(0, 1fr);
   background: var(--paper);
 }
 
@@ -2176,6 +2183,12 @@ html.in-meeting .skip-link { display: none; }
   white-space: nowrap;
 }
 .meet-top-title:focus { outline: none; }
+.meet-copy { flex-shrink: 0; }
+.meet-copy-short { display: none; }
+@media (max-width: 560px) {
+  .meet-copy-long { display: none; }
+  .meet-copy-short { display: inline; }
+}
 
 .meet-body { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); min-height: 0; }
 

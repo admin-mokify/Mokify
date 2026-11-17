@@ -35,7 +35,7 @@
 //
 // Cost: Cloudflare counts the data the relay sends to students. The first
 // 1,000 GB a month are free, then $0.05 per GB. A four-person video call
-// uses roughly 3 GB an hour, a one-on-one lesson about 0.5 GB.
+// uses roughly 3 GB an hour, a one-on-one lesson (720p) about 1.1 GB.
 //
 // Mokify must never pay for it, so before handing out a relay password this
 // file asks Cloudflare how much the relay has sent in the last 30 days and
