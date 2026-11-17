@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initTeacherFinder();
   initChat();
   initReviewPage();
+  initCodesPage();
   initNotifications();
 });
 
@@ -1410,6 +1411,7 @@ function initAccountPage() {
     showProfile(profile);
     initTeacherCard(teacher, school);
     initReviewerLink(session);
+    initAdminLink(session);
     setText('account-school', school === undefined ? 'Nepavyko įkelti' : school && school.name);
     if (school && !school.active) {
       showBanner(
@@ -3006,6 +3008,286 @@ async function initReviewerLink(session) {
   const link = document.getElementById('review-link');
   if (!link) return;
   const res = await callApi('/rest/v1/rpc/is_reviewer', { body: {}, token: session.access_token });
+  link.hidden = !(res.ok && res.data === true);
+}
+
+// ---------------------------------------------------------------------------
+// Registration codes (kodai.html): Mokify's admins add schools and create the
+// codes students sign up with. Who is an admin, and every rule, lives in the
+// database (supabase/updates/2026-11-19-admin-codes.sql); for anyone else
+// this page gets nothing.
+// ---------------------------------------------------------------------------
+
+const CODES_MAX = 1000;
+const NEW_SCHOOL = 'new';
+
+const CODES_ERRORS = {
+  network: NETWORK_FAILED_MSG,
+  bad_count: `Galima sukurti nuo 1 iki ${CODES_MAX} kodų iš karto.`,
+  bad_name: 'Įvesk mokyklos pavadinimą (2–200 simbolių).',
+  bad_email: 'Patikrink el. pašto adresą.',
+  bad_date: 'Pasirink datą nuo šiandien iki penkerių metų į priekį.',
+  exists: 'Mokykla tokiu pavadinimu jau yra. Pasirink ją sąraše.',
+  expired: 'Šios mokyklos prenumerata baigėsi, todėl jos kodais užsiregistruoti nebūtų galima.',
+  not_found: 'Šios mokyklos nebėra. Atnaujink puslapį.',
+  failed: 'Nepavyko. Pabandyk dar kartą.',
+};
+
+// "YYYY-MM-DD" of a local date.
+const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+function initCodesPage() {
+  const page = document.getElementById('codes');
+  if (!page) return;
+  if (!readSession()) {
+    window.location.replace('prisijungti.html?next=kodai.html');
+    return;
+  }
+
+  const form = document.getElementById('codes-form');
+  const select = document.getElementById('codes-school');
+  const newBox = document.getElementById('codes-new');
+  const nameInput = document.getElementById('school-name');
+  const emailInput = document.getElementById('school-email');
+  const endsInput = document.getElementById('school-ends');
+  const countInput = document.getElementById('codes-count');
+  const error = document.getElementById('codes-error');
+  const submit = document.getElementById('codes-submit');
+  const result = document.getElementById('codes-result');
+  const resultTitle = document.getElementById('codes-result-title');
+  const list = document.getElementById('codes-list');
+  const copyBtn = document.getElementById('codes-copy');
+  let schools = [];
+  let today = isoDay(new Date());
+  let made = null; // { school, codes }
+
+  const deny = (text) => {
+    page.hidden = true;
+    if (text) document.getElementById('codes-denied-text').textContent = text;
+    document.getElementById('codes-denied').hidden = false;
+  };
+
+  const setError = (input, message) => {
+    const field = input.closest('.field');
+    field.classList.toggle('has-error', Boolean(message));
+    field.querySelector('.field-error').textContent = message || '';
+    input.setAttribute('aria-invalid', message ? 'true' : 'false');
+  };
+  const clearErrors = () => {
+    [select, nameInput, emailInput, endsInput, countInput].forEach((input) => setError(input, ''));
+    showBanner(error, '');
+  };
+
+  // A new school's subscription: by default to the end of the coming
+  // school year (31 August).
+  const setDateLimits = () => {
+    const [y, m, d] = today.split('-').map(Number);
+    endsInput.min = today;
+    endsInput.max = `${y + 5}-${String(m).padStart(2, '0')}-${String(Math.min(d, 28)).padStart(2, '0')}`;
+    if (!endsInput.value) endsInput.value = `${m >= 9 ? y + 1 : y}-08-31`;
+  };
+
+  const showNewFields = () => {
+    newBox.hidden = select.value !== NEW_SCHOOL;
+  };
+
+  function fillSchools(selectId) {
+    const options = schools.map((s) => {
+      const option = document.createElement('option');
+      option.value = s.id;
+      const expired = s.subscription_ends < today;
+      const free = s.codes - s.used;
+      option.textContent = expired
+        ? `${s.name} — prenumerata baigėsi`
+        : `${s.name} — ${free} ${pluralLt(free, 'laisvas kodas', 'laisvi kodai', 'laisvų kodų')}`;
+      option.disabled = expired;
+      return option;
+    });
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.disabled = true;
+    placeholder.textContent = 'Pasirink mokyklą';
+    const add = document.createElement('option');
+    add.value = NEW_SCHOOL;
+    add.textContent = 'Pridėti naują mokyklą…';
+    select.replaceChildren(placeholder, ...options, add);
+    const keep = selectId && schools.some((s) => s.id === selectId);
+    select.value = keep ? selectId : (schools.length ? '' : NEW_SCHOOL);
+    showNewFields();
+  }
+
+  async function loadSchools(selectId) {
+    const session = await getSession();
+    if (!session) {
+      if (!readSession()) window.location.replace('prisijungti.html?next=kodai.html');
+      else showBanner(error, NETWORK_FAILED_MSG);
+      return;
+    }
+    const data = await reviewRpc(session, 'admin_schools', {});
+    if (!data.ok) {
+      if (data.error === 'forbidden') deny();
+      else if (data.error === 'missing') deny('Kodų kūrimas dar neįjungtas.');
+      else showBanner(error, CODES_ERRORS[data.error] || CODES_ERRORS.failed);
+      return;
+    }
+    if (typeof data.today === 'string') today = data.today;
+    schools = Array.isArray(data.schools) ? data.schools : [];
+    setDateLimits();
+    fillSchools(selectId);
+    submit.disabled = false;
+  }
+
+  // Checks the form; returns false and marks the fields if something is off.
+  function validate() {
+    let ok = true;
+    const count = Number(countInput.value);
+    if (!Number.isInteger(count) || count < 1 || count > CODES_MAX) {
+      setError(countInput, CODES_ERRORS.bad_count);
+      ok = false;
+    }
+    if (!select.value) {
+      setError(select, 'Pasirink mokyklą arba pridėk naują.');
+      ok = false;
+    }
+    if (select.value === NEW_SCHOOL) {
+      const name = nameInput.value.trim().replace(/\s+/g, ' ');
+      if (name.length < 2 || name.length > 200) {
+        setError(nameInput, CODES_ERRORS.bad_name);
+        ok = false;
+      } else if (schools.some((s) => s.name.toLowerCase() === name.toLowerCase())) {
+        setError(nameInput, CODES_ERRORS.exists);
+        ok = false;
+      }
+      const email = emailInput.value.trim();
+      if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+        setError(emailInput, CODES_ERRORS.bad_email);
+        ok = false;
+      }
+      if (!endsInput.value || endsInput.value < endsInput.min || endsInput.value > endsInput.max) {
+        setError(endsInput, CODES_ERRORS.bad_date);
+        ok = false;
+      }
+    }
+    return ok;
+  }
+
+  const FIELD_OF_ERROR = { bad_name: nameInput, exists: nameInput, bad_email: emailInput, bad_date: endsInput, bad_count: countInput };
+  const showError = (code) => {
+    if (code === 'forbidden') {
+      deny();
+      return;
+    }
+    const input = FIELD_OF_ERROR[code];
+    if (input) setError(input, CODES_ERRORS[code]);
+    else showBanner(error, CODES_ERRORS[code] || CODES_ERRORS.failed);
+  };
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearErrors();
+    if (!validate()) return;
+    setBusy(submit, true, 'Kuriama…');
+    const session = await getSession();
+    if (!session) {
+      setBusy(submit, false);
+      showError('network');
+      return;
+    }
+
+    // A new school is saved first and then stays selected, so trying again
+    // after a failure doesn't add it twice.
+    let schoolId = select.value;
+    if (schoolId === NEW_SCHOOL) {
+      const created = await reviewRpc(session, 'admin_create_school', {
+        p_name: nameInput.value,
+        p_contact_email: emailInput.value.trim() || null,
+        p_subscription_ends: endsInput.value,
+      });
+      if (!created.ok || !created.school) {
+        setBusy(submit, false);
+        showError(created.error);
+        return;
+      }
+      schools = [...schools, created.school].sort((a, b) => a.name.localeCompare(b.name, 'lt'));
+      schoolId = created.school.id;
+      fillSchools(schoolId);
+      nameInput.value = '';
+      emailInput.value = '';
+    }
+
+    const count = Number(countInput.value);
+    const data = await reviewRpc(session, 'admin_generate_codes', { p_school: schoolId, p_count: count });
+    setBusy(submit, false);
+    if (!data.ok || !Array.isArray(data.codes)) {
+      showError(data.error);
+      return;
+    }
+    made = { school: data.school, codes: data.codes };
+    const n = data.codes.length;
+    resultTitle.textContent = `Sukurta ${n} ${pluralLt(n, 'kodas', 'kodai', 'kodų')}: ${data.school}`;
+    list.value = data.codes.join('\n');
+    form.hidden = true;
+    result.hidden = false;
+    resultTitle.focus();
+  });
+
+  select.addEventListener('change', () => {
+    setError(select, '');
+    showNewFields();
+    if (select.value === NEW_SCHOOL) nameInput.focus();
+  });
+
+  copyBtn.addEventListener('click', async () => {
+    if (!made) return;
+    try {
+      await navigator.clipboard.writeText(made.codes.join('\n'));
+      copyBtn.textContent = 'Nukopijuota';
+      window.clearTimeout(copyBtn.resetTimer);
+      copyBtn.resetTimer = window.setTimeout(() => {
+        copyBtn.textContent = 'Kopijuoti';
+      }, 2500);
+    } catch {
+      // No clipboard access: select them so they can be copied by hand.
+      list.focus();
+      list.select();
+    }
+  });
+
+  // A spreadsheet file (opens in Excel or Google Sheets). The BOM tells Excel
+  // it's UTF-8, so Lithuanian letters in the school name come out right.
+  document.getElementById('codes-download').addEventListener('click', () => {
+    if (!made) return;
+    const school = `"${made.school.replace(/"/g, '""')}"`;
+    const csv = `﻿Mokykla,Kodas\r\n${made.codes.map((c) => `${school},${c}`).join('\r\n')}\r\n`;
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `mokify-kodai-${today}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+
+  document.getElementById('codes-again').addEventListener('click', () => {
+    const selected = select.value;
+    made = null;
+    list.value = '';
+    result.hidden = true;
+    form.hidden = false;
+    loadSchools(selected);
+    select.focus();
+  });
+
+  submit.disabled = true;
+  loadSchools();
+}
+
+// paskyra.html: admins get a way to the codes page.
+async function initAdminLink(session) {
+  const link = document.getElementById('codes-link');
+  if (!link) return;
+  const res = await callApi('/rest/v1/rpc/is_admin', { body: {}, token: session.access_token });
   link.hidden = !(res.ok && res.data === true);
 }
 

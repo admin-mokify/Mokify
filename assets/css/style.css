@@ -1832,6 +1832,25 @@ textarea.field-control { min-height: 96px; resize: vertical; line-height: 1.5; }
 .review-denied[hidden] { display: none; }
 .review-denied { display: grid; justify-items: start; gap: var(--space-4); max-width: 560px; margin-inline: auto; }
 
+/* Registration codes (kodai.html) */
+.codes { max-width: 560px; margin-inline: auto; }
+.codes .account-edit-title { margin-bottom: var(--space-5); }
+.codes-new {
+  display: grid;
+  gap: var(--space-5);
+  margin: 0;
+  padding: var(--space-5) 0 0;
+  border: 0;
+  border-top: 1.5px solid rgba(32, 30, 27, 0.15);
+}
+.codes-new[hidden] { display: none; }
+.codes-new-title { padding: 0; margin-bottom: var(--space-1); font-weight: 600; font-size: 1.05rem; }
+.codes-result { display: grid; gap: var(--space-4); }
+.codes-result[hidden] { display: none; }
+.codes-result-title { font-size: 1.2rem; overflow-wrap: anywhere; }
+.codes-result-title:focus { outline: none; }
+.codes-list { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; letter-spacing: 0.04em; }
+
 .review-tabs {
   display: flex;
   flex-wrap: wrap;
