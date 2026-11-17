@@ -3096,10 +3096,10 @@ function initCodesPage() {
       const option = document.createElement('option');
       option.value = s.id;
       const expired = s.subscription_ends < today;
-      const free = s.codes - s.used;
+      // What exists already (not a limit on how many can be made).
       option.textContent = expired
         ? `${s.name} — prenumerata baigėsi`
-        : `${s.name} — ${free} ${pluralLt(free, 'laisvas kodas', 'laisvi kodai', 'laisvų kodų')}`;
+        : `${s.name} — sukurta ${s.codes} ${pluralLt(s.codes, 'kodas', 'kodai', 'kodų')}, panaudota ${s.used}`;
       option.disabled = expired;
       return option;
     });
