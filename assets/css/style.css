@@ -329,19 +329,15 @@ h3, .h3 {
 /* "Beta" sticker after the logo in the menu (every page, from here). */
 .nav-shell .brand::after {
   content: "Beta";
-  padding: 0.1rem 0.45rem;
-  border: 1.5px solid var(--ink-900);
-  border-radius: var(--radius-sm);
-  background: var(--highlighter);
-  box-shadow: 1.5px 1.5px 0 var(--ink-900);
-  color: var(--ink-900);
+  padding: 0 0.35rem;
+  border: 1px solid rgba(32, 30, 27, 0.35);
+  border-radius: 999px;
+  color: var(--text-muted);
   font-family: var(--font-body);
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  line-height: 1.3;
-  transform: rotate(-4deg);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  line-height: 1.5;
 }
 .brand img { height: 28px; width: 28px; transition: filter var(--dur-header) var(--ease-out); }
 
@@ -1922,58 +1918,33 @@ textarea.field-control { min-height: 96px; resize: vertical; line-height: 1.5; }
 .reward-star { flex-shrink: 0; width: 72px; height: 72px; }
 .reward-star svg { width: 100%; height: 100%; overflow: visible; animation: star-twinkle 3s ease-in-out infinite; }
 
-/* The points medal beside a name: a plain gold coin with the total inside,
-   a thin inner ring like a minted edge, stamped like the rest of the site.
+/* The points coin beside a name: a plain gold circle with the total inside.
    The number shrinks as it gets longer. */
 .points-slot { display: inline-flex; }
 .points-slot[hidden] { display: none; }
 .points-badge {
-  position: relative;
   display: inline-grid;
   place-items: center;
   flex-shrink: 0;
-  width: 64px;
-  height: 64px;
-  border: 1.5px solid var(--ink-900);
+  width: 44px;
+  height: 44px;
+  border: 1.5px solid #C98A0B;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 28%, #FFF3B8 0%, #FFD54A 38%, #F2AE0F 78%, #D98E00 100%);
-  box-shadow: var(--stamp-sm), inset 0 -3px 0 rgba(140, 80, 0, 0.25);
-  overflow: hidden;
-}
-/* The minted inner ring. */
-.points-badge::before {
-  content: "";
-  position: absolute;
-  inset: 5px;
-  border: 1.5px solid rgba(150, 95, 0, 0.45);
-  border-radius: 50%;
-}
-/* A slow shine across the coin. */
-.points-badge::after {
-  content: "";
-  position: absolute;
-  inset: -20% auto -20% -70%;
-  width: 45%;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.7), transparent);
-  transform: skewX(-20deg);
-  animation: teacher-mark-shine 4.2s var(--ease-out) infinite;
+  background: linear-gradient(180deg, #FFDB5C 0%, #F5B400 100%);
 }
 .points-badge-value {
-  position: relative;
-  z-index: 1;
   color: #5A3A00;
   font-family: var(--font-hero);
   font-weight: 800;
-  font-size: 1.3rem;
+  font-size: 0.95rem;
   line-height: 1;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
-  text-shadow: 0 1px 0 rgba(255, 244, 190, 0.9);
 }
-.points-badge[data-digits="3"] .points-badge-value { font-size: 1.1rem; }
-.points-badge[data-digits="4"] .points-badge-value { font-size: 0.92rem; }
-.points-badge[data-digits="5"] .points-badge-value { font-size: 0.76rem; }
-.points-badge[data-digits="6"] .points-badge-value { font-size: 0.64rem; }
+.points-badge[data-digits="3"] .points-badge-value { font-size: 0.85rem; }
+.points-badge[data-digits="4"] .points-badge-value { font-size: 0.72rem; }
+.points-badge[data-digits="5"] .points-badge-value { font-size: 0.6rem; }
+.points-badge[data-digits="6"] .points-badge-value { font-size: 0.5rem; }
 
 /* Social hours on the account page: a normal detail line with the
    certificates button after the number. */
@@ -2235,8 +2206,7 @@ textarea.field-control { min-height: 96px; resize: vertical; line-height: 1.5; }
 
 @media (prefers-reduced-motion: reduce) {
   .reward--points::before,
-  .reward-star svg,
-  .points-badge::after { display: none; }
+  .reward-star svg { animation: none; }
 }
 
 /* Administration (admin.html): one tool per row, in the student's own order.
