@@ -453,19 +453,19 @@ h3, .h3 {
    Motion — scroll reveal
    ========================================================================== */
 
-/* --reveal-progress (0-1) is set on the ancestor <section> by JS and
-   inherits down; no default is declared here so that inheritance — rather
-   than a directly-set value — is what reaches these elements. */
+/* Each element fades and slides up once when it comes into view; JS adds
+   .is-revealed (see initSectionReveal). The separate translate/scale
+   properties leave an element's own transform alone, e.g. a flashcard's
+   tilt and its hover lift. */
 .js [data-reveal] {
-  opacity: var(--reveal-progress, 0);
-  transform: translateY(calc((1 - var(--reveal-progress, 0)) * 56px));
-  transition: opacity 120ms linear, transform 120ms linear;
+  opacity: 0;
+  translate: 0 20px;
+  transition: opacity 700ms var(--ease-out), translate 700ms var(--ease-out),
+              scale 700ms var(--ease-out), transform var(--dur-base) var(--ease-out),
+              box-shadow var(--dur-base) var(--ease-out);
 }
-.js [data-reveal="scale"] {
-  transform: translateY(calc((1 - var(--reveal-progress, 0)) * 36px))
-              rotate(var(--rot, -1deg))
-              scale(calc(0.82 + var(--reveal-progress, 0) * 0.18));
-}
+.js [data-reveal="scale"] { scale: 0.96; }
+.js [data-reveal].is-revealed { opacity: 1; translate: none; scale: none; }
 
 /* ==========================================================================
    Hero

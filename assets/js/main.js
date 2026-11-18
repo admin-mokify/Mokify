@@ -84,62 +84,31 @@ function initTransparentHeader() {
   window.addEventListener('scroll', onScroll, { passive: true });
 }
 
-// Each <section>'s reveal elements track a continuous --reveal-progress
-// (0-1) instead of a binary on/off: it's how much of that section is
-// currently visible (0 = just touching the viewport edge, 1 = the whole
-// section — or as much of it as can fit — is on screen). A light scroll
-// that only grazes a section barely nudges it in; scrolling until the
-// whole section is showing brings it fully in. Set on the <section> via
-// a scroll/resize-driven rAF loop, it inherits down into every
-// [data-reveal] descendant, so this is O(sections) per frame, not
-// O(reveal elements).
+// Each [data-reveal] element fades and slides up once, as it comes into
+// view, and then stays put. Its inline --reveal-delay staggers elements
+// that come into view together (cards in a row, a heading and its text).
 function initSectionReveal() {
-  const allTargets = document.querySelectorAll('[data-reveal], [data-reveal-draw]');
-  if (!allTargets.length) return;
+  const targets = document.querySelectorAll('[data-reveal]');
+  if (!targets.length) return;
 
-  const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (prefersReduced) {
-    allTargets.forEach((el) => el.style.setProperty('--reveal-progress', 1));
+  const showAll = () => targets.forEach((el) => el.classList.add('is-revealed'));
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || !('IntersectionObserver' in window)) {
+    showAll();
     return;
   }
 
-  const sections = Array.from(document.querySelectorAll('main > section'));
-  if (!sections.length) {
-    // No <section> wrappers on this page (e.g. the 404 shell) — nothing to
-    // scrub against, so just reveal everything once.
-    allTargets.forEach((el) => el.style.setProperty('--reveal-progress', 1));
-    return;
-  }
-
-  let ticking = false;
-
-  const updateProgress = () => {
-    ticking = false;
-    const viewportHeight = window.innerHeight;
-    sections.forEach((section) => {
-      const rect = section.getBoundingClientRect();
-      const visibleHeight = Math.max(0, Math.min(rect.bottom, viewportHeight) - Math.max(rect.top, 0));
-      const denom = Math.min(rect.height, viewportHeight) || 1;
-      const linear = Math.min(1, Math.max(0, visibleHeight / denom));
-      // Cubic ease-in: raw visibility climbs roughly linearly, but a
-      // section barely poking into view (e.g. 50% visible) should still
-      // read as clearly hidden, not already half-revealed — this keeps
-      // early progress small and saves the dramatic reveal for once the
-      // section is substantially on screen.
-      const eased = linear * linear * linear;
-      section.style.setProperty('--reveal-progress', eased.toFixed(3));
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      observer.unobserve(entry.target);
+      const delay = parseInt(getComputedStyle(entry.target).getPropertyValue('--reveal-delay'), 10) || 0;
+      window.setTimeout(() => entry.target.classList.add('is-revealed'), Math.min(delay, 400));
     });
-  };
+  // Starts once the element's top is a little above the bottom of the
+  // screen, so it is seen moving rather than appearing already in place.
+  }, { rootMargin: '0px 0px -8% 0px' });
 
-  const requestUpdate = () => {
-    if (ticking) return;
-    ticking = true;
-    requestAnimationFrame(updateProgress);
-  };
-
-  updateProgress();
-  window.addEventListener('scroll', requestUpdate, { passive: true });
-  window.addEventListener('resize', requestUpdate);
+  targets.forEach((el) => observer.observe(el));
 }
 
 function initFaqAccordion() {
