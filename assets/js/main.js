@@ -4473,7 +4473,13 @@ const LESSON_ERRORS = {
 // Calls one of the lesson_* database functions. Resolves to its answer,
 // { ok: true, ... } or { ok: false, error }.
 async function lessonRpc(session, fn, body) {
-  const res = await callApi(`/rest/v1/rpc/${fn}`, { body, token: session.access_token });
+  let res = await callApi(`/rest/v1/rpc/${fn}`, { body, token: session.access_token });
+  // A database without lesson lengths yet (2026-11-22-lesson-length-points.sql
+  // not run): ask again without one, so lessons still work.
+  if (res.status === 404 && body && 'p_duration' in body) {
+    const { p_duration: _ignored, ...rest } = body;
+    res = await callApi(`/rest/v1/rpc/${fn}`, { body: rest, token: session.access_token });
+  }
   if (res.ok && res.data && typeof res.data.ok === 'boolean') return res.data;
   if (res.status === 0 || res.unconfigured) return { ok: false, error: 'network' };
   if (res.status === 429) return { ok: false, error: 'limit' };
