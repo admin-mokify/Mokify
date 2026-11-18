@@ -2092,6 +2092,56 @@ textarea.field-control { min-height: 96px; resize: vertical; line-height: 1.5; }
 .lb-medal--1 .lb-block { background: linear-gradient(180deg, #FFE07A 0%, #F5B400 100%); }
 .lb-medal--2 .lb-block { background: linear-gradient(180deg, #F3F5F7 0%, #BFC5CD 100%); }
 .lb-medal--3 .lb-block { background: linear-gradient(180deg, #F2C89E 0%, #C98146 100%); }
+/* A place nobody has yet: a dashed question mark on a paler block. */
+.lb-step--empty .lb-step-card { position: relative; cursor: help; }
+.lb-step--empty .lb-step-card:focus { outline: none; }
+.lb-step--empty .lb-step-card:focus-visible .lb-step-unknown { outline: 3px solid var(--pen-blue); outline-offset: 3px; }
+/* The explanation bubble above the question mark (hover, tap or focus). */
+.lb-tip {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  z-index: 5;
+  width: max-content;
+  max-width: 180px;
+  padding: var(--space-2) var(--space-3);
+  border: 1.5px solid var(--ink-900);
+  border-radius: var(--radius-sm);
+  background: var(--ink-900);
+  box-shadow: var(--stamp-sm);
+  color: var(--white);
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.35;
+  pointer-events: none;
+  opacity: 0;
+  translate: -50% 4px;
+  transition: opacity var(--dur-fast) ease, translate var(--dur-fast) ease;
+}
+.lb-tip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  translate: -50% 0;
+  border: 6px solid transparent;
+  border-top-color: var(--ink-900);
+}
+.lb-step--empty .lb-step-card:hover .lb-tip,
+.lb-step--empty .lb-step-card:focus .lb-tip { opacity: 1; translate: -50% 0; }
+.lb-step-unknown {
+  display: grid;
+  place-items: center;
+  border-style: dashed;
+  background: var(--paper-raised);
+  box-shadow: none;
+  color: var(--text-muted);
+  font-family: var(--font-hero);
+  font-weight: 800;
+  font-size: 2.2rem;
+}
+.lb-step--empty .lb-block { filter: saturate(0.35) opacity(0.75); }
+.lb-step--empty .lb-block-place { color: rgba(32, 30, 27, 0.55); }
 @keyframes lb-rise {
   from { transform: scaleY(0); }
   to { transform: scaleY(1); }

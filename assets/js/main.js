@@ -5411,6 +5411,29 @@ function initLeaderboardPage() {
     return li;
   }
 
+  // A podium place nobody has yet: a question mark instead of a student,
+  // with the explanation on hover.
+  function emptyStep(i) {
+    const li = document.createElement('li');
+    li.className = `lb-step lb-step--${i + 1} lb-medal--${i + 1} lb-step--empty`;
+    const text = 'Šios vietos dar niekas neužėmė.';
+    const card = document.createElement('div');
+    card.className = 'lb-step-card';
+    card.tabIndex = 0; // a tap or the keyboard shows the explanation too
+    card.setAttribute('aria-label', `${i + 1} vieta: ${text}`);
+    const frame = textEl('span', 'avatar-frame lb-step-avatar lb-step-unknown', '?');
+    frame.setAttribute('aria-hidden', 'true');
+    const tip = textEl('span', 'lb-tip', text);
+    tip.setAttribute('aria-hidden', 'true');
+    card.appendChild(tip);
+    const block = document.createElement('span');
+    block.className = 'lb-block';
+    block.appendChild(textEl('span', 'lb-block-place', `${i + 1}`));
+    card.append(frame, block);
+    li.appendChild(card);
+    return li;
+  }
+
   function listRow(item) {
     const li = document.createElement('li');
     li.className = 'lb-row';
@@ -5453,10 +5476,13 @@ function initLeaderboardPage() {
     total = Number(res.total) || 0;
     if (reset) {
       list.replaceChildren();
-      // No search: the first three stand on the podium, the list goes on after them.
+      // No search: the first three stand on the podium (empty places show a
+      // question mark), the list goes on after them.
       const top = !query ? items.slice(0, 3) : [];
-      podium.replaceChildren(...top.map(podiumCard));
-      podium.hidden = !top.length;
+      const steps = top.map(podiumCard);
+      if (!query) for (let i = top.length; i < 3; i += 1) steps.push(emptyStep(i));
+      podium.replaceChildren(...steps);
+      podium.hidden = Boolean(query);
       list.append(...items.slice(top.length).map(listRow));
       if (res.me) {
         const p = Number(res.me.points) || 0;
