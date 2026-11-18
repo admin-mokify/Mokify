@@ -2353,6 +2353,12 @@ function initMeetings() {
       $('done-title').textContent = ending.title;
       $('done-text').textContent = ending.text || '';
       $('done-text').hidden = !ending.text;
+      // A finished lesson: the points (and the teacher's social hours) it gave.
+      const rewards = $('done-rewards');
+      if (rewards) {
+        if (ending.rewards) renderLessonRewards(rewards, ending.rewards);
+        else rewards.hidden = true;
+      }
       doneRejoin.hidden = !ending.rejoin;
       setPhase('done');
       $('done-title').focus();
@@ -2568,18 +2574,22 @@ function initMeetings() {
     }));
   }
 
+  // The last screen of a finished lesson.
+  function finishedEnding(res) {
+    const name = res.partner && res.partner.name;
+    return {
+      title: 'Pamoka įvyko',
+      text: name ? `Ačiū už pamoką su ${name}!` : 'Ačiū už pamoką!',
+      rewards: res,
+    };
+  }
+
   // The lesson's call ended: find out whether it was because of being late,
   // and whether it counted as finished (and the points it gave).
   async function lessonEnded() {
     const res = await meetingRpc('lesson_open', { p_lesson: lessonId });
     if (res.error === 'over' && res.finished === true) {
-      const points = Number(res.points) || 0;
-      finish('ended', {
-        ending: {
-          title: 'Pamoka baigėsi',
-          text: points ? `Pamoka įvyko. Už ją gavai ${points} ${pluralLt(points, 'tašką', 'taškus', 'taškų')}.` : 'Pamoka įvyko.',
-        },
-      });
+      finish('ended', { ending: finishedEnding(res) });
       return;
     }
     if (res.error === 'late') {
@@ -2625,6 +2635,12 @@ function initMeetings() {
     }
     if (res.error === 'signed_out') {
       toLogin();
+      return;
+    }
+    // A finished lesson opened again (e.g. from the chat): its results.
+    if (res.error === 'over' && res.finished === true) {
+      if (res.partner && UUID_PATTERN.test(res.partner.id || '')) $('done-home').href = `zinutes.html?su=${res.partner.id}`;
+      finish('ended', { ending: finishedEnding(res) });
       return;
     }
     lobbyTitle.textContent = 'Pamoka';

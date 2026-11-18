@@ -22,6 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initAdminPage();
   initUsersPage();
   initSchoolsPage();
+  initVerifyPage();
   initNotifications();
 });
 
@@ -1389,13 +1390,7 @@ function initAccountPage() {
     }
     showProfile(profile);
     initTeacherCard(teacher, school);
-    // Points from finished lessons (teachers get more than students).
-    callApi('/rest/v1/rpc/my_points', { body: {}, token: session.access_token }).then((res) => {
-      if (!res.ok || !res.data || res.data.ok !== true) return;
-      const total = Number(res.data.total) || 0;
-      setText('account-points', `${total} ${pluralLt(total, 'taškas', 'taškai', 'taškų')}`);
-      document.getElementById('account-points-row').hidden = false;
-    });
+    initAccountRewards(session, Boolean(teacher));
     setText('account-school', school === undefined ? 'Nepavyko įkelti' : school && school.name);
     if (school && !school.active) {
       showBanner(
@@ -4507,6 +4502,295 @@ function formatDuration(minutes) {
 // The lengths a lesson can have: 15 minutes to 4 hours, every 15 minutes.
 const LESSON_DURATIONS = Array.from({ length: 16 }, (_, i) => (i + 1) * 15);
 const LESSON_DEFAULT_DURATION = 60;
+
+// --- Rewards: points and social hours (account page, end of a lesson) -------
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const svgEl = (name, attrs = {}) => {
+  const el = document.createElementNS(SVG_NS, name);
+  Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, v));
+  return el;
+};
+
+// Social hours as people write them: 30 -> "0,5", 90 -> "1,5", 60 -> "1".
+const formatHours = (minutes) => String(Math.round((Number(minutes) || 0) / 6) / 10).replace('.', ',');
+
+// The public page that checks a certificate.
+function hoursUrl(code) {
+  const local = /^(localhost|127\.|\[::1\])/.test(window.location.hostname);
+  return `${window.location.origin}/${local ? 'patvirtinimas.html' : 'patvirtinimas'}?k=${encodeURIComponent(code)}`;
+}
+
+// A QR code as an SVG (assets/js/vendor/qrcode.js does the encoding).
+function buildQr(text) {
+  if (typeof qrcode !== 'function') return null;
+  const qr = qrcode(0, 'M');
+  qr.addData(text);
+  qr.make();
+  const n = qr.getModuleCount();
+  const quiet = 4;
+  const size = n + quiet * 2;
+  let d = '';
+  for (let y = 0; y < n; y += 1) {
+    for (let x = 0; x < n; x += 1) {
+      if (qr.isDark(y, x)) d += `M${x + quiet} ${y + quiet}h1v1h-1z`;
+    }
+  }
+  const svg = svgEl('svg', { viewBox: `0 0 ${size} ${size}`, role: 'img', 'aria-label': 'QR kodas', 'shape-rendering': 'crispEdges' });
+  svg.append(svgEl('rect', { width: size, height: size, fill: '#fff' }), svgEl('path', { d, fill: '#201E1B' }));
+  return svg;
+}
+
+// A flickering flame (three layers, each in its own fire gradient).
+let flameCount = 0;
+function buildFlame() {
+  flameCount += 1;
+  const id = (name) => `flame-${flameCount}-${name}`;
+  const svg = svgEl('svg', { viewBox: '0 0 40 52', 'aria-hidden': 'true' });
+  const defs = svgEl('defs');
+  [['outer', '#FFB020', '#E8361B'], ['inner', '#FFE07A', '#FF8A1F'], ['core', '#FFFBE6', '#FFD24A']].forEach(([name, top, bottom]) => {
+    const g = svgEl('linearGradient', { id: id(name), x1: '0', y1: '0', x2: '0', y2: '1' });
+    g.append(svgEl('stop', { offset: '0%', 'stop-color': top }), svgEl('stop', { offset: '100%', 'stop-color': bottom }));
+    defs.appendChild(g);
+  });
+  svg.append(
+    defs,
+    svgEl('path', { class: 'flame-outer', fill: `url(#${id('outer')})`, d: 'M20 1C23 11 35 18 35 32c0 10-7 18-15 18S5 42 5 32c0-8 5-12 8-19 1 5 3 8 6 9-2-7-1-14 1-21z' }),
+    svgEl('path', { class: 'flame-inner', fill: `url(#${id('inner')})`, d: 'M20 17c2 7 9 11 9 19 0 7-4 12-9 12s-9-5-9-12c0-5 3-8 5-12 1 3 2 5 4 6-1-4-1-9 0-13z' }),
+    svgEl('path', { class: 'flame-core', fill: `url(#${id('core')})`, d: 'M20 31c1 4 5 6 5 10 0 4-2 7-5 7s-5-3-5-7c0-3 2-5 3-7 0 2 1 3 2 3 0-2-1-4 0-6z' }),
+  );
+  return svg;
+}
+
+// Counts a number up to its value (just shows it, for reduced motion).
+function countUp(el, to, prefix = '') {
+  const end = Number(to) || 0;
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || end <= 0) {
+    el.textContent = `${prefix}${end}`;
+    return;
+  }
+  const start = performance.now();
+  const ms = Math.min(1400, 500 + end * 4);
+  const step = (now) => {
+    const t = Math.min(1, (now - start) / ms);
+    el.textContent = `${prefix}${Math.round(end * (1 - (1 - t) ** 3))}`;
+    if (t < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+const textEl = (tag, className, text) => {
+  const el = document.createElement(tag);
+  el.className = className;
+  el.textContent = text;
+  return el;
+};
+
+// The points card: flame + big number. gained: "+50" style; else a total.
+function buildPointsReward({ value, gained = false, sub = '' }) {
+  const card = document.createElement('div');
+  card.className = 'reward reward--points';
+  const flame = document.createElement('span');
+  flame.className = 'reward-flame';
+  flame.appendChild(buildFlame());
+  const body = document.createElement('span');
+  body.className = 'reward-body';
+  const number = textEl('span', 'reward-value', `${gained ? '+' : ''}0`);
+  body.append(number, textEl('span', 'reward-label', pluralLt(Number(value) || 0, 'taškas', 'taškai', 'taškų')));
+  if (sub) body.appendChild(textEl('span', 'reward-sub', sub));
+  card.append(flame, body);
+  countUp(number, value, gained ? '+' : '');
+  return card;
+}
+
+// The social hours card: big number (+ an optional button on the right).
+function buildHoursReward({ minutes, gained = false, sub = '', button = null }) {
+  const card = document.createElement('div');
+  card.className = 'reward reward--hours';
+  const body = document.createElement('span');
+  body.className = 'reward-body';
+  const hours = formatHours(minutes);
+  body.append(
+    textEl('span', 'reward-value', `${gained ? '+' : ''}${hours}`),
+    // 0,5 / 1,5 socialinės valandos; 1 socialinė valanda; 2 socialinės valandos; 10 socialinių valandų.
+    textEl('span', 'reward-label', hours.includes(',') ? 'socialinės valandos' : pluralLt(Number(hours), 'socialinė valanda', 'socialinės valandos', 'socialinių valandų')),
+  );
+  if (sub) body.appendChild(textEl('span', 'reward-sub', sub));
+  card.appendChild(body);
+  if (button) card.appendChild(button);
+  return card;
+}
+
+// A certificate: its QR code, the link it opens, and copying that link.
+function buildHoursCert(code) {
+  const cert = document.createElement('div');
+  cert.className = 'hours-cert';
+  const url = hoursUrl(code);
+  const qr = buildQr(url);
+  if (qr) {
+    const box = document.createElement('div');
+    box.className = 'hours-qr';
+    box.appendChild(qr);
+    cert.appendChild(box);
+  }
+  cert.appendChild(textEl('p', 'text-muted', 'Nuskenavus kodą arba atidarius nuorodą matyti, kad šios valandos tikros.'));
+  const link = document.createElement('a');
+  link.className = 'hours-link';
+  link.href = url;
+  link.target = '_blank';
+  link.rel = 'noopener';
+  link.textContent = url.replace(/^https?:\/\//, '');
+  const copy = document.createElement('button');
+  copy.type = 'button';
+  copy.className = 'btn btn-ghost btn-sm';
+  copy.textContent = 'Kopijuoti nuorodą';
+  copy.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      copy.textContent = 'Nukopijuota';
+      window.clearTimeout(copy.resetTimer);
+      copy.resetTimer = window.setTimeout(() => { copy.textContent = 'Kopijuoti nuorodą'; }, 2500);
+    } catch {
+      window.prompt('Nukopijuok nuorodą:', url);
+    }
+  });
+  cert.append(link, copy);
+  return cert;
+}
+
+// The end of a finished lesson (pamoka.html): the points it gave, and for
+// its teacher the social hours with their certificate.
+function renderLessonRewards(container, res) {
+  const parts = [];
+  const points = Number(res.points) || 0;
+  if (points) {
+    const total = Number(res.points_total) || 0;
+    parts.push(buildPointsReward({ value: points, gained: true, sub: total ? `Iš viso: ${total} ${pluralLt(total, 'taškas', 'taškai', 'taškų')}` : '' }));
+  }
+  if (res.hours && res.hours.code) {
+    const total = Number(res.hours.total) || 0;
+    parts.push(buildHoursReward({ minutes: res.hours.minutes, gained: true, sub: total ? `Iš viso: ${formatHours(total)} val.` : '' }));
+    parts.push(buildHoursCert(res.hours.code));
+  }
+  container.replaceChildren(...parts);
+  container.hidden = !parts.length;
+}
+
+// patvirtinimas.html?k=<code>: anyone (also not logged in) checks that a
+// social hours certificate is real. The database answers only for that one
+// code (verify_social_hours in supabase/updates/2026-11-23-rewards.sql).
+async function initVerifyPage() {
+  const page = document.getElementById('verify');
+  if (!page) return;
+  const status = document.getElementById('verify-status');
+  const details = document.getElementById('verify-details');
+  const note = document.getElementById('verify-note');
+  const code = (new URLSearchParams(window.location.search).get('k') || '').trim().toLowerCase();
+  const invalid = (text) => {
+    status.textContent = text;
+    status.className = 'verify-status is-invalid';
+  };
+  if (!/^[a-z2-9]{20}$/.test(code)) {
+    invalid('Tokia pažyma nerasta. Patikrink, ar nuoroda nukopijuota visa.');
+    return;
+  }
+  const res = await callApi('/rest/v1/rpc/verify_social_hours', { body: { p_code: code } });
+  if (!res.ok) {
+    invalid(res.status === 0 ? NETWORK_FAILED_MSG : 'Patikrinti nepavyko. Pabandyk dar kartą vėliau.');
+    return;
+  }
+  const v = res.data || {};
+  if (v.ok !== true) {
+    invalid('Tokia pažyma nerasta. Patikrink, ar nuoroda nukopijuota visa.');
+    return;
+  }
+  status.textContent = 'Patvirtinta: šios socialinės valandos tikros.';
+  status.className = 'verify-status is-valid';
+  const row = (label, value) => {
+    const div = document.createElement('div');
+    div.append(textEl('dt', '', label), textEl('dd', '', value));
+    return div;
+  };
+  details.replaceChildren(
+    row('Moksleivis', v.name),
+    row('Mokykla', v.school),
+    row('Socialinės valandos', `${formatHours(v.minutes)} val. (${v.minutes} min.)`),
+    row('Už pamoką', `${formatReviewTime(v.lesson_at)}, ${formatDuration(v.lesson_minutes)}`),
+    row('Išduota', formatReviewTime(v.issued_at)),
+  );
+  details.hidden = false;
+  note.textContent = 'Valandos skiriamos moksleiviui, kuris Mokify platformoje vedė pamoką kitam moksleiviui ir ji įvyko iki galo.';
+  note.hidden = false;
+}
+
+// paskyra.html: the points total, and for teachers (or anyone who has some)
+// the social hours, whose certificates open in a window.
+async function initAccountRewards(session, isTeacher) {
+  const box = document.getElementById('account-rewards');
+  if (!box) return;
+  const ask = (fn) => callApi(`/rest/v1/rpc/${fn}`, { body: {}, token: session.access_token })
+    .then((res) => (res.ok && res.data && res.data.ok === true ? res.data : null));
+  const [points, hours] = await Promise.all([ask('my_points'), ask('my_social_hours')]);
+  const cards = [];
+  if (points) {
+    const lessons = Number(points.lessons) || 0;
+    cards.push(buildPointsReward({
+      value: Number(points.total) || 0,
+      sub: lessons ? `Už ${lessons} ${pluralLt(lessons, 'įvykusią pamoką', 'įvykusias pamokas', 'įvykusių pamokų')}` : 'Už įvykusias pamokas',
+    }));
+  }
+  const items = hours && Array.isArray(hours.items) ? hours.items : [];
+  if (hours && (isTeacher || items.length)) {
+    let button = null;
+    if (items.length) {
+      button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'btn btn-ghost btn-sm';
+      button.textContent = 'Pažymos';
+      button.addEventListener('click', () => showHoursCertificates(items));
+    }
+    cards.push(buildHoursReward({
+      minutes: hours.minutes,
+      sub: items.length ? `Už ${items.length} ${pluralLt(items.length, 'pamoką', 'pamokas', 'pamokų')}` : 'Už vedamas pamokas',
+      button,
+    }));
+  }
+  box.replaceChildren(...cards);
+  box.hidden = !cards.length;
+}
+
+// The certificates window: one line per lesson; choosing one shows its QR
+// code and link.
+function showHoursCertificates(items) {
+  const dialog = document.getElementById('hours-dialog');
+  const list = document.getElementById('hours-list');
+  const slot = document.getElementById('hours-cert');
+  const show = (item, button, scroll) => {
+    list.querySelectorAll('[aria-pressed]').forEach((b) => b.setAttribute('aria-pressed', 'false'));
+    button.setAttribute('aria-pressed', 'true');
+    slot.replaceChildren(buildHoursCert(item.code));
+    if (scroll) slot.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  };
+  const buttons = items.map((item) => {
+    const li = document.createElement('li');
+    li.className = 'users-row';
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'users-open';
+    b.setAttribute('aria-pressed', 'false');
+    b.append(
+      textEl('span', 'users-name', `${formatHours(item.minutes)} val.`),
+      textEl('span', 'users-meta text-muted', `Pamoka ${formatReviewTime(item.lesson_at)} · ${formatDuration(item.lesson_minutes)}`),
+    );
+    b.addEventListener('click', () => show(item, b, true));
+    li.appendChild(b);
+    list.appendChild(li);
+    return b;
+  });
+  list.replaceChildren(...buttons.map((b) => b.parentElement));
+  if (items[0]) show(items[0], buttons[0]);
+  dialog.showModal();
+}
 
 // A date as <input type="date"> wants it, in the student's own time zone.
 const dateInputValue = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;

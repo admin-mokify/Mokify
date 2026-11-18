@@ -77,6 +77,8 @@
 
             <p class="form-error" id="account-warning" role="status"></p>
 
+            <div class="rewards" id="account-rewards" hidden></div>
+
             <dl class="account-details">
               <div>
                 <dt>El. pašto adresas</dt>
@@ -89,10 +91,6 @@
               <div>
                 <dt>Mokykla</dt>
                 <dd id="account-school">—</dd>
-              </div>
-              <div id="account-points-row" hidden>
-                <dt>Taškai</dt>
-                <dd id="account-points">—</dd>
               </div>
             </dl>
 
@@ -210,6 +208,17 @@
           </form>
         </dialog>
 
+        <dialog class="confirm-dialog profile-dialog" id="hours-dialog" aria-labelledby="hours-dialog-title">
+          <div class="profile-dialog-body">
+            <h2 class="account-edit-title" id="hours-dialog-title">Socialinių valandų pažymos</h2>
+            <ul class="users-list" id="hours-list"></ul>
+            <div class="hours-cert-slot" id="hours-cert"></div>
+            <form method="dialog" class="account-edit-actions">
+              <button type="submit" class="btn btn-ghost">Uždaryti</button>
+            </form>
+          </div>
+        </dialog>
+
       </div>
     </div>
   </section>
@@ -264,6 +273,7 @@
 </footer>
 
 <script src="assets/js/config.js"></script>
+<script src="assets/js/vendor/qrcode.js"></script>
 <script src="assets/js/main.js"></script>
 </body>
 </html>
