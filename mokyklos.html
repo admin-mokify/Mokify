@@ -75,6 +75,55 @@
         <ul class="users-list" id="schools-list" aria-labelledby="schools-count"></ul>
       </div>
 
+      <dialog class="confirm-dialog profile-dialog school-details" id="school-info" aria-labelledby="school-info-name">
+        <div class="profile-dialog-body">
+          <div class="school-info-head">
+            <h2 class="account-edit-title" id="school-info-name"></h2>
+            <p class="schools-status" id="school-info-status"></p>
+          </div>
+          <p class="form-error" id="school-info-error" role="alert"></p>
+          <dl class="account-details" id="school-info-details"></dl>
+
+          <section class="school-section" aria-labelledby="school-codes-title">
+            <h3 class="school-section-title" id="school-codes-title">Registracijos kodai</h3>
+            <p class="text-muted" id="school-codes-counts"></p>
+            <p class="form-done" id="school-codes-done" role="status"></p>
+            <div class="account-edit-actions">
+              <a class="btn btn-primary btn-sm" id="school-codes-new" href="kodai.html">Kurti naujų kodų</a>
+              <button type="button" class="btn btn-ghost btn-sm" id="school-codes-copy">Kopijuoti laisvus</button>
+              <button type="button" class="btn btn-ghost btn-sm" id="school-codes-download">Atsisiųsti laisvus</button>
+              <button type="button" class="btn btn-ghost btn-sm btn-danger-ghost" id="school-codes-delete-all">Ištrinti visus laisvus</button>
+            </div>
+            <div class="field school-codes-filter">
+              <label class="field-label" for="school-codes-show">Rodyti</label>
+              <select class="field-control" id="school-codes-show">
+                <option value="all">Visus kodus</option>
+                <option value="free">Laisvus</option>
+                <option value="used">Panaudotus</option>
+                <option value="pending">Kuriais dabar registruojamasi</option>
+              </select>
+            </div>
+            <ul class="users-list school-codes" id="school-codes"></ul>
+            <button type="button" class="btn btn-ghost btn-sm" id="school-codes-more" hidden>Rodyti daugiau</button>
+          </section>
+
+          <section class="school-section" aria-labelledby="school-students-title">
+            <h3 class="school-section-title" id="school-students-title">Moksleiviai</h3>
+            <ul class="users-list" id="school-students"></ul>
+          </section>
+
+          <section class="school-section" aria-labelledby="school-batches-title">
+            <h3 class="school-section-title" id="school-batches-title">Kodų kūrimo istorija</h3>
+            <ul class="users-list" id="school-batches"></ul>
+          </section>
+
+          <div class="account-edit-actions">
+            <button type="button" class="btn btn-ghost" id="school-info-edit">Keisti mokyklą</button>
+            <button type="button" class="btn btn-ghost" id="school-info-close">Uždaryti</button>
+          </div>
+        </div>
+      </dialog>
+
       <dialog class="confirm-dialog profile-dialog" id="school-dialog" aria-labelledby="school-dialog-title">
         <form class="auth-form" id="school-form" novalidate>
           <h2 class="account-edit-title" id="school-dialog-title">Keisti mokyklą</h2>
@@ -100,6 +149,18 @@
           </div>
           <div class="school-danger">
             <button type="button" class="btn btn-ghost btn-danger-ghost" id="school-delete">Ištrinti mokyklą</button>
+          </div>
+        </form>
+      </dialog>
+
+      <dialog class="confirm-dialog" id="codes-confirm" aria-labelledby="codes-confirm-title">
+        <form method="dialog" class="auth-form">
+          <h2 class="account-edit-title" id="codes-confirm-title">Ištrinti laisvus kodus?</h2>
+          <p id="codes-confirm-text"></p>
+          <p class="form-error" id="codes-confirm-error" role="alert"></p>
+          <div class="account-edit-actions">
+            <button type="button" class="btn btn-danger" id="codes-confirm-ok">Ištrinti</button>
+            <button type="submit" class="btn btn-ghost" autofocus>Atšaukti</button>
           </div>
         </form>
       </dialog>

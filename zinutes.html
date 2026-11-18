@@ -145,13 +145,17 @@
           <form class="auth-form" id="lesson-form" novalidate>
             <h2 class="account-edit-title" id="lesson-dialog-title">Suplanuoti pamoką</h2>
             <p id="lesson-dialog-text"></p>
-            <div class="field">
+            <div class="field" id="lesson-date-field">
               <label class="field-label" for="lesson-date">Diena</label>
               <input class="field-control" type="date" id="lesson-date" name="date" required>
             </div>
-            <div class="field">
+            <div class="field" id="lesson-time-field">
               <label class="field-label" for="lesson-time">Laikas</label>
               <input class="field-control" type="time" id="lesson-time" name="time" step="300" required>
+            </div>
+            <div class="field" id="lesson-duration-field">
+              <label class="field-label" for="lesson-duration">Trukmė</label>
+              <select class="field-control" id="lesson-duration" name="duration" required></select>
             </div>
             <p class="form-error" id="lesson-error" role="alert"></p>
             <div class="account-edit-actions">

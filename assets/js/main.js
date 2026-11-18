@@ -1389,6 +1389,13 @@ function initAccountPage() {
     }
     showProfile(profile);
     initTeacherCard(teacher, school);
+    // Points from finished lessons (teachers get more than students).
+    callApi('/rest/v1/rpc/my_points', { body: {}, token: session.access_token }).then((res) => {
+      if (!res.ok || !res.data || res.data.ok !== true) return;
+      const total = Number(res.data.total) || 0;
+      setText('account-points', `${total} ${pluralLt(total, 'taškas', 'taškai', 'taškų')}`);
+      document.getElementById('account-points-row').hidden = false;
+    });
     setText('account-school', school === undefined ? 'Nepavyko įkelti' : school && school.name);
     if (school && !school.active) {
       showBanner(
@@ -3305,8 +3312,11 @@ function initSchoolsPage() {
     list.replaceChildren(...shown.map((s) => {
       const li = document.createElement('li');
       li.className = 'users-row schools-row';
-      const info = document.createElement('div');
-      info.className = 'schools-info';
+      // The school's name and lines: a button that opens everything about it.
+      const info = document.createElement('button');
+      info.type = 'button';
+      info.className = 'users-open schools-info';
+      info.addEventListener('click', () => showInfo(s));
       const name = document.createElement('span');
       name.className = 'users-name';
       name.textContent = s.name;
@@ -3386,6 +3396,268 @@ function initSchoolsPage() {
     // (The date already ends with "d.", so no full stop after it.)
     showBanner(done, `„${s.name}“ prenumerata pratęsta iki ${formatLtDate(s.subscription_ends)}`);
   }
+
+  // --- Everything about one school, and its codes -------------------------------
+
+  const info = document.getElementById('school-info');
+  const infoError = document.getElementById('school-info-error');
+  const codesList = document.getElementById('school-codes');
+  const codesShow = document.getElementById('school-codes-show');
+  const codesMore = document.getElementById('school-codes-more');
+  const codesDone = document.getElementById('school-codes-done');
+  const codesConfirm = document.getElementById('codes-confirm');
+  const CODE_STATES = { free: 'laisvas', used: 'panaudotas', pending: 'juo dabar registruojamasi' };
+  const CODES_PAGE = 200;
+  let detail = null; // { school (row in the list), data (admin_school's answer) }
+  let codesShown = CODES_PAGE;
+
+  const infoRow = (label, value) => {
+    const row = document.createElement('div');
+    const dt = document.createElement('dt');
+    dt.textContent = label;
+    const dd = document.createElement('dd');
+    dd.textContent = value;
+    row.append(dt, dd);
+    return row;
+  };
+  const freeCodes = () => (detail ? detail.data.codes.filter((c) => c.state === 'free').map((c) => c.code) : []);
+
+  function renderCounts() {
+    const c = detail.data.counts;
+    const parts = [`laisvi ${c.free}`, `panaudoti ${c.used}`];
+    if (c.pending) parts.push(`dabar registruojamasi ${c.pending}`);
+    document.getElementById('school-codes-counts').textContent =
+      `Iš viso ${c.codes} ${pluralLt(c.codes, 'kodas', 'kodai', 'kodų')}: ${parts.join(', ')}.`;
+    const none = c.free === 0;
+    ['school-codes-copy', 'school-codes-download', 'school-codes-delete-all'].forEach((id) => {
+      document.getElementById(id).disabled = none;
+    });
+  }
+
+  function renderCodes() {
+    const wanted = codesShow.value;
+    const all = detail.data.codes.filter((c) => wanted === 'all' || c.state === wanted);
+    const shown = all.slice(0, codesShown);
+    codesList.replaceChildren(...shown.map((c) => {
+      const li = document.createElement('li');
+      li.className = 'users-row school-code';
+      const text = document.createElement('span');
+      text.className = 'school-code-text';
+      const code = document.createElement('span');
+      code.className = 'school-code-value';
+      code.textContent = c.code;
+      const state = document.createElement('span');
+      state.className = `users-meta text-muted school-code-state is-${c.state}`;
+      state.textContent = c.state === 'used' && c.username
+        ? `${CODE_STATES.used} (@${c.username}, ${formatReviewTime(c.redeemed_at)})`
+        : CODE_STATES[c.state] || c.state;
+      text.append(code, state);
+      li.appendChild(text);
+      // Only a code nobody has can be deleted.
+      if (c.state === 'free') {
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'btn btn-ghost btn-sm btn-danger-ghost';
+        del.textContent = 'Ištrinti';
+        del.setAttribute('aria-label', `Ištrinti kodą ${c.code}`);
+        del.addEventListener('click', () => deleteCodes([c.code], del));
+        li.appendChild(del);
+      }
+      return li;
+    }));
+    if (!all.length) {
+      const li = document.createElement('li');
+      li.className = 'users-row text-muted';
+      li.textContent = wanted === 'all' ? 'Šiai mokyklai kodų dar nesukurta.' : 'Tokių kodų nėra.';
+      codesList.appendChild(li);
+    }
+    codesMore.hidden = all.length <= shown.length;
+    if (!codesMore.hidden) codesMore.textContent = `Rodyti daugiau (dar ${all.length - shown.length})`;
+  }
+
+  function renderInfo() {
+    const { data } = detail;
+    const sc = data.school;
+    document.getElementById('school-info-name').textContent = sc.name;
+    const status = statusOf(sc);
+    const statusEl = document.getElementById('school-info-status');
+    statusEl.textContent = status.text;
+    statusEl.className = `schools-status ${status.cls}`.trim();
+    const teachers = data.students.filter((s) => s.teacher).length;
+    document.getElementById('school-info-details').replaceChildren(
+      infoRow('Kontaktinis el. paštas', sc.contact_email || '—'),
+      infoRow('Pridėta', formatReviewTime(sc.created_at)),
+      infoRow('Moksleiviai', `${data.students.length}${teachers ? `, iš jų mokytojų ${teachers}` : ''}`),
+    );
+    document.getElementById('school-codes-new').href = `kodai.html?mokykla=${encodeURIComponent(sc.id)}`;
+    renderCounts();
+    renderCodes();
+
+    const students = document.getElementById('school-students');
+    document.getElementById('school-students-title').textContent = `Moksleiviai (${data.students.length})`;
+    students.replaceChildren(...data.students.map((p) => {
+      const li = document.createElement('li');
+      li.className = 'users-row';
+      const a = document.createElement('a');
+      a.className = 'users-open';
+      a.href = `vartotojai.html?q=${encodeURIComponent(p.username)}`;
+      const name = document.createElement('span');
+      name.className = 'users-name';
+      name.textContent = p.full_name;
+      if (p.teacher) {
+        const tag = document.createElement('span');
+        tag.className = 'users-roles';
+        tag.textContent = 'Mokytojas';
+        name.append(' ', tag);
+      }
+      const meta = document.createElement('span');
+      meta.className = 'users-meta text-muted';
+      meta.textContent = `@${p.username} · ${p.grade} klasė`;
+      a.append(name, meta);
+      li.appendChild(a);
+      return li;
+    }));
+    if (!data.students.length) {
+      const li = document.createElement('li');
+      li.className = 'users-row text-muted';
+      li.textContent = 'Moksleivių dar nėra.';
+      students.appendChild(li);
+    }
+
+    const batches = document.getElementById('school-batches');
+    batches.replaceChildren(...data.batches.map((b) => {
+      const li = document.createElement('li');
+      li.className = 'users-row users-meta';
+      li.textContent = `${formatReviewTime(b.created_at)} · ${b.count} ${pluralLt(b.count, 'kodas', 'kodai', 'kodų')}${b.by ? ` · @${b.by}` : ''}`;
+      return li;
+    }));
+    if (!data.batches.length) {
+      const li = document.createElement('li');
+      li.className = 'users-row text-muted';
+      li.textContent = 'Kodai šiai mokyklai dar nekurti.';
+      batches.appendChild(li);
+    }
+  }
+
+  async function showInfo(s) {
+    detail = null;
+    showBanner(infoError, '');
+    showBanner(codesDone, '');
+    codesShow.value = 'all';
+    codesShown = CODES_PAGE;
+    document.getElementById('school-info-name').textContent = s.name;
+    document.getElementById('school-info-status').textContent = 'Kraunama…';
+    document.getElementById('school-info-details').replaceChildren();
+    [codesList, document.getElementById('school-students'), document.getElementById('school-batches')].forEach((el) => el.replaceChildren());
+    document.getElementById('school-codes-counts').textContent = '';
+    codesMore.hidden = true;
+    if (!info.open) info.showModal();
+    const res = await rpc('admin_school', { p_school: s.id });
+    if (!res.ok || !res.school) {
+      fail(res, infoError);
+      return;
+    }
+    if (typeof res.today === 'string') today = res.today;
+    detail = { school: s, data: res };
+    renderInfo();
+  }
+
+  // Deletes free codes (all of them when codes is null) and updates both
+  // this window and the school's line in the list.
+  async function deleteCodes(codes, btn) {
+    if (!detail) return null;
+    const { school, data } = detail;
+    showBanner(codesDone, '');
+    showBanner(infoError, '');
+    if (btn) setBusy(btn, true, 'Trinama…');
+    const res = await rpc('admin_delete_codes', { p_school: school.id, p_codes: codes });
+    if (btn) setBusy(btn, false);
+    if (!res.ok) {
+      fail(res, infoError);
+      return res;
+    }
+    const n = Number(res.deleted) || 0;
+    // The real figures again, rather than guessing them here.
+    const fresh = await rpc('admin_school', { p_school: school.id });
+    if (fresh.ok && fresh.school && detail && detail.school === school) {
+      detail.data = fresh;
+      school.codes = Number(fresh.counts.codes) || 0;
+      school.used = Number(fresh.counts.used) || 0;
+    } else {
+      const gone = new Set(codes || freeCodes());
+      data.codes = data.codes.filter((c) => !(c.state === 'free' && gone.has(c.code)));
+      data.counts.free = Math.max(0, data.counts.free - n);
+      data.counts.codes = Math.max(0, data.counts.codes - n);
+      school.codes = Math.max(0, school.codes - n);
+    }
+    renderInfo();
+    renderList();
+    showBanner(codesDone, n
+      ? `${pluralLt(n, 'Ištrintas', 'Ištrinti', 'Ištrinta')} ${n} ${pluralLt(n, 'kodas', 'kodai', 'kodų')}.`
+      : 'Nieko neištrinta: šie kodai jau panaudoti arba jais registruojamasi.');
+    return res;
+  }
+
+  codesShow.addEventListener('change', () => {
+    codesShown = CODES_PAGE;
+    if (detail) renderCodes();
+  });
+  codesMore.addEventListener('click', () => {
+    codesShown += CODES_PAGE;
+    renderCodes();
+  });
+
+  document.getElementById('school-codes-copy').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const codes = freeCodes();
+    if (!codes.length) return;
+    try {
+      await navigator.clipboard.writeText(codes.join('\n'));
+      btn.textContent = 'Nukopijuota';
+      window.clearTimeout(btn.resetTimer);
+      btn.resetTimer = window.setTimeout(() => { btn.textContent = 'Kopijuoti laisvus'; }, 2500);
+    } catch {
+      showBanner(infoError, 'Nepavyko nukopijuoti. Atsisiųsk kodus failu.');
+    }
+  });
+
+  // The free codes as a spreadsheet file, like on the codes page.
+  document.getElementById('school-codes-download').addEventListener('click', () => {
+    const codes = freeCodes();
+    if (!codes.length || !detail) return;
+    const name = `"${detail.data.school.name.replace(/"/g, '""')}"`;
+    const csv = `﻿Mokykla,Kodas\r\n${codes.map((c) => `${name},${c}`).join('\r\n')}\r\n`;
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `mokify-laisvi-kodai-${today}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+
+  document.getElementById('school-codes-delete-all').addEventListener('click', () => {
+    if (!detail) return;
+    const n = detail.data.counts.free;
+    showBanner(document.getElementById('codes-confirm-error'), '');
+    document.getElementById('codes-confirm-text').textContent =
+      `Visi ${n} „${detail.data.school.name}“ laisvi ${pluralLt(n, 'kodas', 'kodai', 'kodų')} bus ištrinti visam laikui. Panaudoti kodai ir tie, kuriais dabar registruojamasi, liks.`;
+    codesConfirm.showModal();
+  });
+  document.getElementById('codes-confirm-ok').addEventListener('click', async (e) => {
+    const res = await deleteCodes(null, e.currentTarget);
+    if (res && res.ok) codesConfirm.close();
+    else if (res) showBanner(document.getElementById('codes-confirm-error'), SCHOOLS_ERRORS[res.error] || SCHOOLS_ERRORS.failed);
+  });
+
+  document.getElementById('school-info-close').addEventListener('click', () => info.close());
+  document.getElementById('school-info-edit').addEventListener('click', () => {
+    if (!detail) return;
+    const s = detail.school;
+    info.close();
+    showSchool(s);
+  });
 
   // --- The dialog: change or delete one school ---------------------------------
 
@@ -3843,6 +4115,9 @@ function initUsersPage() {
     }
     const prefs = await reviewRpc(session, 'staff_prefs_get', {});
     if (prefs.ok) confirmBox.checked = prefs.confirm_delete !== false;
+    // Opened from a school's list of students: that student's search.
+    const asked = new URLSearchParams(window.location.search).get('q');
+    if (asked) search.value = asked.slice(0, 100);
     load();
   })();
 }
@@ -4170,7 +4445,8 @@ function initCodesPage() {
   });
 
   submit.disabled = true;
-  loadSchools();
+  // Opened from a school's page ("Kurti naujų kodų"): that school chosen.
+  loadSchools(new URLSearchParams(window.location.search).get('mokykla') || undefined);
 }
 
 
@@ -4184,6 +4460,7 @@ const LESSON_ERRORS = {
   already: 'Jūs jau turite suplanuotą pamoką arba neatsakytą pasiūlymą.',
   started: 'Pamoka jau prasidėjo, todėl jos nebegalima perkelti ar atšaukti.',
   bad_time: 'Pasirink laiką ne anksčiau kaip po 5 minučių ir ne vėliau kaip po metų.',
+  bad_duration: 'Pamoka gali trukti nuo 15 minučių iki 4 valandų.',
   closed: CHAT_CLOSED_MSG,
   no_teacher: 'Pamokas galima rengti tik su mokytoju.',
   inactive: 'Tavo mokyklos Mokify prenumerata pasibaigė, todėl pamokos šiuo metu neprieinamos.',
@@ -4214,6 +4491,16 @@ function formatLessonTime(iso) {
   });
   return `${day}, ${d.toLocaleTimeString('lt-LT', { hour: '2-digit', minute: '2-digit' })}`;
 }
+
+// A lesson's length: "45 min.", "1 val.", "1 val. 30 min."
+function formatDuration(minutes) {
+  const m = Number(minutes) || 0;
+  if (m < 60) return `${m} min.`;
+  return m % 60 ? `${Math.floor(m / 60)} val. ${m % 60} min.` : `${m / 60} val.`;
+}
+// The lengths a lesson can have: 15 minutes to 4 hours, every 15 minutes.
+const LESSON_DURATIONS = Array.from({ length: 16 }, (_, i) => (i + 1) * 15);
+const LESSON_DEFAULT_DURATION = 60;
 
 // A date as <input type="date"> wants it, in the student's own time zone.
 const dateInputValue = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -4543,6 +4830,12 @@ function initChat() {
     }
     const name = current ? current.full_name : '';
     const when = l.starts_at ? formatLessonTime(l.starts_at) : '';
+    const length = l.duration ? formatDuration(l.duration) : '';
+    // "penktadienis, lapkričio 14 d., 16:00, 1 val."
+    const whenLong = when && length ? `${when}, ${length}` : when;
+    // A sentence ends with one full stop, also after "val." or "min.".
+    const sentence = (s) => (s.endsWith('.') ? s : `${s}.`);
+    const earned = l.points ? ` Gavai ${l.points} ${pluralLt(l.points, 'tašką', 'taškus', 'taškų')}.` : '';
     if (li.dataset.event === 'cancel') {
       // Asking to call a lesson off (from an earlier version of the site,
       // when that needed both to agree).
@@ -4571,25 +4864,26 @@ function initChat() {
     }
     if (!l.starts_at) {
       // A lesson right now.
+      const lasting = length ? ` (${length})` : '';
       if (l.state === 'open') {
-        text.textContent = l.by_me ? 'Pakvietei į pamoką.' : `${name} kviečia į pamoką.`;
+        text.textContent = l.by_me ? `Pakvietei į pamoką${lasting}.` : `${name} kviečia į pamoką${lasting}.`;
         actions.append(joinLink(l.id));
       } else {
-        text.textContent = 'Pamoka baigėsi.';
+        text.textContent = `Pamoka baigėsi.${earned}`;
       }
     } else if (l.state === 'proposed') {
       if (l.by_me) {
-        text.textContent = `Pasiūlei pamoką: ${when}. Laukiama atsakymo.`;
+        text.textContent = `${sentence(`Pasiūlei pamoką: ${whenLong}`)} Laukiama atsakymo.`;
         actions.append(lessonButton('Atšaukti pasiūlymą', 'btn-ghost', (btn) => lessonAction(btn, 'lesson_cancel', { p_lesson: l.id })));
       } else {
-        text.textContent = `${name} siūlo pamoką: ${when}.`;
+        text.textContent = sentence(`${name} siūlo pamoką: ${whenLong}`);
         actions.append(
           lessonButton('Sutinku', 'btn-primary', (btn) => lessonAction(btn, 'lesson_answer', { p_lesson: l.id, p_accept: true })),
           lessonButton('Netinka', 'btn-ghost', (btn) => lessonAction(btn, 'lesson_answer', { p_lesson: l.id, p_accept: false })),
         );
       }
     } else if (l.state === 'upcoming' || l.state === 'open') {
-      text.textContent = `Pamoka sutarta: ${when}.`;
+      text.textContent = sentence(`Pamoka sutarta: ${whenLong}`);
       if (l.state === 'open') actions.append(joinLink(l.id));
       else {
         if (!l.reschedule) actions.append(lessonButton('Perkelti', 'btn-ghost', () => openPlanner(l)));
@@ -4604,7 +4898,7 @@ function initChat() {
     } else {
       text.textContent = `${{
         declined: 'Pasiūlymas atmestas', cancelled: 'Pamoka atšaukta', expired: 'Pasiūlymas nebegalioja', over: 'Pamoka baigėsi',
-      }[l.state] || 'Pamoka'}: ${when}.`;
+      }[l.state] || 'Pamoka'}: ${when}.${l.state === 'over' ? earned : ''}`;
     }
   }
 
@@ -4919,29 +5213,28 @@ function initChat() {
   };
 
   if (hasLessons) {
-    // The camera button: a lesson right now. The other student gets an
-    // invitation with a button in this chat; the lesson opens in a new tab.
-    // (The tab has to be opened at the moment of the click, or browsers
-    // block it; it gets its address once the lesson exists.)
-    meetBtn.addEventListener('click', async () => {
-      if (!current || meetBtn.disabled) return;
-      const partner = current;
+    // The camera button: a lesson right now, after choosing how long it
+    // lasts. The other student gets an invitation with a button in this
+    // chat; the lesson opens in a new tab. (The tab has to be opened at the
+    // moment of the click on "Pakviesti", or browsers block it; it gets its
+    // address once the lesson exists.)
+    async function inviteNow(partner, duration) {
       showBanner(errorEl, '');
       const tab = window.open('', '_blank');
       if (tab) tab.opener = null;
       meetBtn.disabled = true;
       session = (await getSession()) || session;
-      const result = await lessonRpc(session, 'lesson_request', { p_partner: partner.id, p_starts_at: null });
+      const result = await lessonRpc(session, 'lesson_request', { p_partner: partner.id, p_starts_at: null, p_duration: duration });
       meetBtn.disabled = false;
       if (!result.ok || !UUID_PATTERN.test(result.id || '')) {
         if (tab) tab.close();
-        showBanner(errorEl, LESSON_ERRORS[result.error] || LESSON_ERRORS.failed);
-        return;
+        return result;
       }
       if (tab && !tab.closed) tab.location.replace(lessonPageLink(result.id));
       else window.location.href = lessonPageLink(result.id);
       poll();
-    });
+      return result;
+    }
 
     // The calendar button: propose a day and time, at most a year ahead.
     const lessonForm = document.getElementById('lesson-form');
@@ -4949,6 +5242,21 @@ function initChat() {
     const lessonError = document.getElementById('lesson-error');
     const dateInput = lessonForm.elements.date;
     const timeInput = lessonForm.elements.time;
+    const durationInput = lessonForm.elements.duration;
+    durationInput.replaceChildren(...LESSON_DURATIONS.map((m) => {
+      const option = document.createElement('option');
+      option.value = String(m);
+      option.textContent = formatDuration(m);
+      return option;
+    }));
+    // 'plan' (a new time), 'move' (a new time for an agreed lesson) or 'now'.
+    let lessonMode = 'plan';
+    const setLessonFields = () => {
+      document.getElementById('lesson-date-field').hidden = lessonMode === 'now';
+      document.getElementById('lesson-time-field').hidden = lessonMode === 'now';
+      // Moving keeps the lesson's length.
+      document.getElementById('lesson-duration-field').hidden = lessonMode === 'move';
+    };
     const yearAhead = () => {
       const d = new Date();
       d.setFullYear(d.getFullYear() + 1);
@@ -5029,7 +5337,10 @@ function initChat() {
     let moving = null;
     function showPlanner(lessonToMove) {
       moving = lessonToMove || null;
+      lessonMode = moving ? 'move' : 'plan';
       lessonForm.reset();
+      durationInput.value = String(LESSON_DEFAULT_DURATION);
+      setLessonFields();
       showBanner(lessonError, '');
       const from = moving ? new Date(moving.starts_at) : new Date(Date.now() + 24 * 60 * 60 * 1000);
       dateInput.min = dateInputValue(new Date());
@@ -5049,6 +5360,31 @@ function initChat() {
       lessonDialog.setAttribute('aria-labelledby', 'lesson-dialog-title');
       lessonDialog.showModal();
     }
+
+    // The "now" window: only how long the lesson lasts.
+    function showNow() {
+      moving = null;
+      lessonMode = 'now';
+      lessonForm.reset();
+      durationInput.value = String(LESSON_DEFAULT_DURATION);
+      setLessonFields();
+      showBanner(lessonError, '');
+      document.getElementById('lesson-dialog-title').textContent = 'Pamoka dabar';
+      document.getElementById('lesson-dialog-text').textContent = `${current.full_name} gaus kvietimą prisijungti dabar.`;
+      lessonSend.textContent = 'Pakviesti';
+      if (lessonDialog.open) lessonDialog.close();
+      busyView.hidden = true;
+      lessonForm.hidden = false;
+      lessonDialog.setAttribute('aria-labelledby', 'lesson-dialog-title');
+      lessonDialog.showModal();
+      durationInput.focus();
+    }
+
+    meetBtn.addEventListener('click', () => {
+      if (!current || meetBtn.disabled) return;
+      showBanner(errorEl, '');
+      showNow();
+    });
 
     planBtn.addEventListener('click', async () => {
       if (!current || planBtn.disabled) return;
@@ -5070,6 +5406,22 @@ function initChat() {
       e.preventDefault();
       if (!current) return;
       const partner = current;
+      const duration = Number(durationInput.value);
+      if (lessonMode !== 'move' && !LESSON_DURATIONS.includes(duration)) {
+        showBanner(lessonError, LESSON_ERRORS.bad_duration);
+        return;
+      }
+      if (lessonMode === 'now') {
+        setBusy(lessonSend, true, 'Kviečiama…');
+        const result = await inviteNow(partner, duration);
+        setBusy(lessonSend, false);
+        if (!result.ok || !UUID_PATTERN.test(result.id || '')) {
+          showBanner(lessonError, LESSON_ERRORS[result.error] || LESSON_ERRORS.failed);
+          return;
+        }
+        lessonDialog.close();
+        return;
+      }
       const at = new Date(`${dateInput.value}T${timeInput.value}`);
       if (!dateInput.value || !timeInput.value || Number.isNaN(at.getTime())) {
         showBanner(lessonError, 'Pasirink dieną ir laiką.');
@@ -5087,7 +5439,7 @@ function initChat() {
       session = (await getSession()) || session;
       const result = moving
         ? await lessonRpc(session, 'lesson_reschedule', { p_lesson: moving.id, p_starts_at: at.toISOString() })
-        : await lessonRpc(session, 'lesson_request', { p_partner: partner.id, p_starts_at: at.toISOString() });
+        : await lessonRpc(session, 'lesson_request', { p_partner: partner.id, p_starts_at: at.toISOString(), p_duration: duration });
       setBusy(lessonSend, false);
       if (!result.ok && result.error === 'already') {
         // The other student proposed a time meanwhile: show that one.

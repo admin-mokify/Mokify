@@ -29,6 +29,9 @@ const MEET_CHAT_MAX_LENGTH = 1000;
 const MEET_DEVICES_KEY = 'mokify.meet.devices';
 // Relay passwords are handed out for two hours; fetch new ones well before.
 const MEET_RELAY_FRESH_MS = 60 * 60 * 1000;
+// After a lesson's time is over, the call goes on this long, then ends
+// (the database does the same: supabase/updates/2026-11-22-lesson-length-points.sql).
+const MEET_LESSON_GRACE_MS = 5 * 60 * 1000;
 
 const MEET_ERRORS = {
   signed_out: 'Prisijunk iš naujo, kad galėtum tęsti.',
@@ -2511,6 +2514,47 @@ function initMeetings() {
   }
   if (lessonMode && lateBox) window.setInterval(lateTick, 1000);
 
+  // The lesson's time. It ends at endsAt (for a lesson right now, the
+  // database only knows that once both students are in, so it is asked
+  // every 15 seconds until then). After the end a notice counts down 5
+  // minutes; then the database ends the call for both.
+  const timeBox = $('call-time');
+  const timeText = $('call-time-text');
+  let timingAsked = 0;
+
+  async function askTiming() {
+    timingAsked = Date.now();
+    const res = await meetingRpc('lesson_timing', { p_lesson: lessonId });
+    if (res.ok && lesson) {
+      lesson.endsAt = res.ends_at ? Date.parse(res.ends_at) : null;
+      if (res.now) lesson.offset = Date.parse(res.now) - Date.now();
+    }
+  }
+
+  function timeTick() {
+    if (!lessonMode || !timeBox || !lesson) return;
+    const wasHidden = timeBox.hidden;
+    if (phase !== 'call') {
+      timeBox.hidden = true;
+    } else {
+      if (!lesson.endsAt && Date.now() - timingAsked > 15000) askTiming();
+      const now = Date.now() + lesson.offset;
+      if (lesson.endsAt && now >= lesson.endsAt) {
+        const left = Math.max(0, Math.ceil((lesson.endsAt + MEET_LESSON_GRACE_MS - now) / 1000));
+        const clock = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+        timeText.textContent = `Pamokos laikas baigėsi. Po ${clock} pamoka bus automatiškai užbaigta.`;
+        timeBox.hidden = false;
+        // The database ends it at that moment; ask it right away.
+        if (left === 0) syncSoon(0);
+      } else {
+        timeBox.hidden = true;
+      }
+    }
+    // The notice takes room above the pictures: size them again.
+    if (timeBox.hidden !== wasHidden) measure();
+  }
+  if (lessonMode && timeBox) window.setInterval(timeTick, 1000);
+
   if (lateCancel) {
     lateCancel.addEventListener('click', () => askToConfirm({
       title: 'Atšaukti pamoką?',
@@ -2524,9 +2568,20 @@ function initMeetings() {
     }));
   }
 
-  // The lesson's call ended: find out whether it was because of being late.
+  // The lesson's call ended: find out whether it was because of being late,
+  // and whether it counted as finished (and the points it gave).
   async function lessonEnded() {
     const res = await meetingRpc('lesson_open', { p_lesson: lessonId });
+    if (res.error === 'over' && res.finished === true) {
+      const points = Number(res.points) || 0;
+      finish('ended', {
+        ending: {
+          title: 'Pamoka baigėsi',
+          text: points ? `Pamoka įvyko. Už ją gavai ${points} ${pluralLt(points, 'tašką', 'taškus', 'taškų')}.` : 'Pamoka įvyko.',
+        },
+      });
+      return;
+    }
     if (res.error === 'late') {
       const text = lateText(res.late, lesson && lesson.partner.name);
       finish('late', { ending: { title: 'Pamoka baigta', text } });
@@ -2558,6 +2613,8 @@ function initMeetings() {
         startsAt: res.starts_at ? Date.parse(res.starts_at) : null,
         partnerJoined: res.partner_joined === true,
         offset: res.now ? Date.parse(res.now) - Date.now() : 0,
+        // When the lesson's time ends (empty until both are in a "now" lesson).
+        endsAt: res.ends_at ? Date.parse(res.ends_at) : null,
       };
       // Back to this very chat afterwards.
       if (UUID_PATTERN.test(lesson.partner.id || '')) {
@@ -2577,7 +2634,10 @@ function initMeetings() {
       const when = Number.isNaN(at.getTime()) ? '' : ` (${at.toLocaleString('lt-LT', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })})`;
       message = `Ši pamoka dar neprasidėjo${when}. Prisijungti galėsi likus 10 minučių iki jos pradžios.`;
     } else if (res.error === 'late') message = lateText(res.late, res.partner && res.partner.name);
-    else if (res.error === 'over' || res.error === 'ended') message = 'Ši pamoka jau baigėsi.';
+    else if (res.error === 'over' || res.error === 'ended') {
+      const points = Number(res.points) || 0;
+      message = points ? `Ši pamoka jau baigėsi. Už ją gavai ${points} ${pluralLt(points, 'tašką', 'taškus', 'taškų')}.` : 'Ši pamoka jau baigėsi.';
+    }
     else if (res.error === 'cancelled') message = 'Ši pamoka atšaukta.';
     else if (res.error === 'not_agreed') message = 'Dėl šios pamokos laiko dar nesusitarta.';
     else if (res.error === 'not_found') message = 'Tokios pamokos nėra. Pamokas rasi savo žinutėse.';
