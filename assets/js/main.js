@@ -4002,9 +4002,76 @@ function initUsersPage() {
     document.getElementById('user-username').textContent = `@${u.username}`;
   }
 
+  // --- Adding and taking away points ------------------------------------------
+
+  const pointsForm = document.getElementById('user-points-form');
+  const pointsAmount = document.getElementById('user-points-amount');
+  const pointsNote = document.getElementById('user-points-note');
+  const pointsError = document.getElementById('user-points-error');
+  const pointsDone = document.getElementById('user-points-done');
+  const pointsAdd = document.getElementById('user-points-add');
+  const pointsRemove = document.getElementById('user-points-remove');
+  const POINTS_ERRORS = {
+    bad_amount: 'Įvesk nuo 1 iki 100 000 taškų.',
+    too_long: 'Priežastis gali būti iki 200 simbolių.',
+  };
+
+  // The badge with the user's total; no total (database not updated yet):
+  // no points section.
+  function setPoints(total) {
+    const known = total !== undefined && total !== null;
+    pointsForm.hidden = !known;
+    if (known) document.getElementById('user-points-badge').replaceChildren(buildPointsBadge(total));
+  }
+
+  async function adjustPoints(sign, btn) {
+    if (!open) return;
+    showBanner(pointsError, '');
+    showBanner(pointsDone, '');
+    setFieldError(pointsAmount, '');
+    const n = Number(pointsAmount.value);
+    if (!Number.isInteger(n) || n < 1 || n > 100000) {
+      setFieldError(pointsAmount, POINTS_ERRORS.bad_amount);
+      return;
+    }
+    const row = open;
+    setBusy(btn, true, 'Saugoma…');
+    const res = await rpc('admin_adjust_points', { p_user: row.id, p_amount: sign * n, p_note: pointsNote.value.trim() || null });
+    setBusy(btn, false);
+    if (open !== row) return;
+    if (!res.ok) {
+      if (res.error === 'below_zero') {
+        const total = Number(res.total) || 0;
+        setFieldError(pointsAmount, `Tiek atimti negalima: vartotojas turi tik ${total} ${pluralLt(total, 'tašką', 'taškus', 'taškų')}.`);
+      } else if (res.error === 'bad_amount') {
+        setFieldError(pointsAmount, POINTS_ERRORS.bad_amount);
+      } else {
+        showBanner(pointsError, POINTS_ERRORS[res.error] || USERS_ERRORS[res.error] || USERS_ERRORS.failed);
+      }
+      return;
+    }
+    setPoints(res.total);
+    pointsNote.value = '';
+    const word = pluralLt(n, 'taškas', 'taškai', 'taškų');
+    showBanner(pointsDone, sign > 0
+      ? `${pluralLt(n, 'Pridėtas', 'Pridėti', 'Pridėta')} ${n} ${word}.`
+      : `${pluralLt(n, 'Atimtas', 'Atimti', 'Atimta')} ${n} ${word}.`);
+  }
+
+  pointsForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    adjustPoints(1, pointsAdd);
+  });
+  pointsRemove.addEventListener('click', () => adjustPoints(-1, pointsRemove));
+
   async function showUser(row) {
     open = row;
     clearFormErrors();
+    showBanner(pointsError, '');
+    showBanner(pointsDone, '');
+    setFieldError(pointsAmount, '');
+    pointsNote.value = '';
+    pointsForm.hidden = true;
     fillHeader(row);
     document.getElementById('user-avatar').src = DEFAULT_AVATAR;
     document.getElementById('user-teacher-mark').hidden = !row.teacher;
@@ -4046,6 +4113,8 @@ function initUsersPage() {
     }
     rows.push(detail('Išsiuntė žinučių', String(u.messages_sent || 0)));
     rows.push(detail('Pamokų', String(u.lessons || 0)));
+    if (Number(u.social_minutes) > 0) rows.push(detail('Socialinės valandos', `${formatHours(u.social_minutes)} val.`));
+    setPoints(u.points);
     const roles = [u.admin && 'administratorius', u.reviewer && 'dokumentų tikrintojas'].filter(Boolean);
     if (roles.length) rows.push(detail('Vaidmenys', roles.join(', ')));
     details.replaceChildren(...rows);
@@ -4541,23 +4610,25 @@ function buildQr(text) {
   return svg;
 }
 
-// A flickering flame (three layers, each in its own fire gradient).
-let flameCount = 0;
-function buildFlame() {
-  flameCount += 1;
-  const id = (name) => `flame-${flameCount}-${name}`;
-  const svg = svgEl('svg', { viewBox: '0 0 40 52', 'aria-hidden': 'true' });
+// A gold star with a light shine on its upper half.
+let starCount = 0;
+function buildStar() {
+  starCount += 1;
+  const id = `star-${starCount}`;
+  const svg = svgEl('svg', { viewBox: '0 0 24 24', 'aria-hidden': 'true' });
   const defs = svgEl('defs');
-  [['outer', '#FFB020', '#E8361B'], ['inner', '#FFE07A', '#FF8A1F'], ['core', '#FFFBE6', '#FFD24A']].forEach(([name, top, bottom]) => {
-    const g = svgEl('linearGradient', { id: id(name), x1: '0', y1: '0', x2: '0', y2: '1' });
-    g.append(svgEl('stop', { offset: '0%', 'stop-color': top }), svgEl('stop', { offset: '100%', 'stop-color': bottom }));
-    defs.appendChild(g);
-  });
+  const g = svgEl('linearGradient', { id, x1: '0', y1: '0', x2: '0', y2: '1' });
+  g.append(
+    svgEl('stop', { offset: '0%', 'stop-color': '#FFE680' }),
+    svgEl('stop', { offset: '55%', 'stop-color': '#FFC21A' }),
+    svgEl('stop', { offset: '100%', 'stop-color': '#E89400' }),
+  );
+  defs.appendChild(g);
+  const points = 'M12 1.8l3.05 6.5 7.1.86-5.24 4.88 1.37 7.03L12 17.6l-6.28 3.47 1.37-7.03L1.85 9.16l7.1-.86z';
   svg.append(
     defs,
-    svgEl('path', { class: 'flame-outer', fill: `url(#${id('outer')})`, d: 'M20 1C23 11 35 18 35 32c0 10-7 18-15 18S5 42 5 32c0-8 5-12 8-19 1 5 3 8 6 9-2-7-1-14 1-21z' }),
-    svgEl('path', { class: 'flame-inner', fill: `url(#${id('inner')})`, d: 'M20 17c2 7 9 11 9 19 0 7-4 12-9 12s-9-5-9-12c0-5 3-8 5-12 1 3 2 5 4 6-1-4-1-9 0-13z' }),
-    svgEl('path', { class: 'flame-core', fill: `url(#${id('core')})`, d: 'M20 31c1 4 5 6 5 10 0 4-2 7-5 7s-5-3-5-7c0-3 2-5 3-7 0 2 1 3 2 3 0-2-1-4 0-6z' }),
+    svgEl('path', { class: 'star-shape', d: points, fill: `url(#${id})`, stroke: '#B97200', 'stroke-width': '0.9', 'stroke-linejoin': 'round' }),
+    svgEl('path', { class: 'star-shine', d: 'M12 4.6l1.9 4.05 3.3.4L12 10.6 6.8 9.05l3.3-.4z', fill: '#FFF7CC', opacity: '0.85' }),
   );
   return svg;
 }
@@ -4586,19 +4657,36 @@ const textEl = (tag, className, text) => {
   return el;
 };
 
-// The points card: flame + big number. gained: "+50" style; else a total.
+// The round points badge beside a name: a star over the total.
+function buildPointsBadge(total) {
+  const value = Number(total) || 0;
+  const badge = document.createElement('span');
+  badge.className = 'points-badge';
+  badge.setAttribute('role', 'img');
+  badge.setAttribute('aria-label', `${value} ${pluralLt(value, 'taškas', 'taškai', 'taškų')}`);
+  badge.title = badge.getAttribute('aria-label');
+  const star = document.createElement('span');
+  star.className = 'points-badge-star';
+  star.appendChild(buildStar());
+  const number = textEl('span', 'points-badge-value', '0');
+  badge.append(star, number);
+  countUp(number, value);
+  return badge;
+}
+
+// The points card at the end of a lesson: star + big number ("+50").
 function buildPointsReward({ value, gained = false, sub = '' }) {
   const card = document.createElement('div');
   card.className = 'reward reward--points';
-  const flame = document.createElement('span');
-  flame.className = 'reward-flame';
-  flame.appendChild(buildFlame());
+  const star = document.createElement('span');
+  star.className = 'reward-star';
+  star.appendChild(buildStar());
   const body = document.createElement('span');
   body.className = 'reward-body';
   const number = textEl('span', 'reward-value', `${gained ? '+' : ''}0`);
   body.append(number, textEl('span', 'reward-label', pluralLt(Number(value) || 0, 'taškas', 'taškai', 'taškų')));
   if (sub) body.appendChild(textEl('span', 'reward-sub', sub));
-  card.append(flame, body);
+  card.append(star, body);
   countUp(number, value, gained ? '+' : '');
   return card;
 }
@@ -4633,7 +4721,7 @@ function buildHoursCert(code) {
     box.appendChild(qr);
     cert.appendChild(box);
   }
-  cert.appendChild(textEl('p', 'text-muted', 'Nuskenavus kodą arba atidarius nuorodą matyti, kad šios valandos tikros.'));
+  cert.appendChild(textEl('p', 'text-muted', 'Nuskenuokite, kad patikrintumėte.'));
   const link = document.createElement('a');
   link.className = 'hours-link';
   link.href = url;
@@ -4731,14 +4819,13 @@ async function initAccountRewards(session, isTeacher) {
   const ask = (fn) => callApi(`/rest/v1/rpc/${fn}`, { body: {}, token: session.access_token })
     .then((res) => (res.ok && res.data && res.data.ok === true ? res.data : null));
   const [points, hours] = await Promise.all([ask('my_points'), ask('my_social_hours')]);
-  const cards = [];
-  if (points) {
-    const lessons = Number(points.lessons) || 0;
-    cards.push(buildPointsReward({
-      value: Number(points.total) || 0,
-      sub: lessons ? `Už ${lessons} ${pluralLt(lessons, 'įvykusią pamoką', 'įvykusias pamokas', 'įvykusių pamokų')}` : 'Už įvykusias pamokas',
-    }));
+  // The points: a round badge beside the name.
+  const slot = document.getElementById('account-points');
+  if (points && slot) {
+    slot.replaceChildren(buildPointsBadge(points.total));
+    slot.hidden = false;
   }
+  const cards = [];
   const items = hours && Array.isArray(hours.items) ? hours.items : [];
   if (hours && (isTeacher || items.length)) {
     let button = null;

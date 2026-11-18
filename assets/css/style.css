@@ -1874,8 +1874,8 @@ textarea.field-control { min-height: 96px; resize: vertical; line-height: 1.5; }
 .reward-label { font-weight: 600; font-size: 0.95rem; margin-top: var(--space-1); }
 .reward-sub { font-size: 0.85rem; color: var(--text-muted); margin-top: 2px; }
 
-/* Points: warm card, glowing flame, the number in fire colours. */
-.reward--points { background: linear-gradient(135deg, #FFF7E6, #FFE9D6); }
+/* Points: gold card, a twinkling star with a soft glow, the number in gold. */
+.reward--points { background: linear-gradient(135deg, #FFFBEA, #FFF1C7); }
 .reward--points::before {
   content: "";
   position: absolute;
@@ -1884,30 +1884,48 @@ textarea.field-control { min-height: 96px; resize: vertical; line-height: 1.5; }
   width: 180px;
   height: 180px;
   translate: 0 -50%;
-  background: radial-gradient(circle, rgba(255, 140, 40, 0.45), rgba(255, 140, 40, 0) 65%);
+  background: radial-gradient(circle, rgba(255, 196, 30, 0.45), rgba(255, 196, 30, 0) 65%);
   z-index: -1;
-  animation: reward-glow 2.4s ease-in-out infinite;
+  animation: reward-glow 3s ease-in-out infinite;
 }
 .reward--points .reward-value {
-  background: linear-gradient(180deg, #FF9A1F 0%, #F2541B 55%, #C8281B 100%);
+  background: linear-gradient(180deg, #F5B400 0%, #E08A00 60%, #B86A00 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
-.reward-flame { flex-shrink: 0; width: 64px; height: 80px; }
-.reward-flame svg { width: 100%; height: 100%; overflow: visible; }
-.reward-flame .flame-outer { transform-origin: 50% 100%; animation: flame-flicker 1.6s ease-in-out infinite; }
-.reward-flame .flame-inner { transform-origin: 50% 100%; animation: flame-flicker 1.1s ease-in-out infinite reverse; }
-.reward-flame .flame-core { transform-origin: 50% 100%; animation: flame-flicker 0.8s ease-in-out infinite; }
+.reward-star { flex-shrink: 0; width: 72px; height: 72px; }
+.reward-star svg { width: 100%; height: 100%; overflow: visible; animation: star-twinkle 3s ease-in-out infinite; }
 
-@keyframes flame-flicker {
-  0%, 100% { transform: scale(1, 1) skewX(0deg); }
-  25% { transform: scale(1.04, 0.96) skewX(-2.5deg); }
-  50% { transform: scale(0.97, 1.05) skewX(1.5deg); }
-  75% { transform: scale(1.02, 0.98) skewX(-1deg); }
+/* The round badge beside a name (account page). */
+.points-slot { display: inline-flex; }
+.points-slot[hidden] { display: none; }
+.points-badge {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 64px;
+  height: 64px;
+  padding: 0 var(--space-2);
+  border: 2px solid #C98A0B;
+  border-radius: 999px;
+  background: radial-gradient(circle at 32% 25%, #FFF7D1 0%, #FFD964 50%, #F5B21E 100%);
+  box-shadow: var(--stamp-sm), inset 0 -3px 0 rgba(150, 90, 0, 0.18);
+  color: #5A3A00;
+  line-height: 1;
+}
+.points-badge-star { width: 20px; height: 20px; }
+.points-badge-star svg { width: 100%; height: 100%; animation: star-twinkle 3s ease-in-out infinite; }
+.points-badge-value { font-family: var(--font-hero); font-weight: 700; font-size: 1.05rem; margin-top: 2px; font-variant-numeric: tabular-nums; }
+
+@keyframes star-twinkle {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  45% { transform: rotate(-8deg) scale(1.08); }
+  55% { transform: rotate(6deg) scale(1.06); }
 }
 @keyframes reward-glow {
-  0%, 100% { opacity: 0.75; scale: 1; }
+  0%, 100% { opacity: 0.7; scale: 1; }
   50% { opacity: 1; scale: 1.12; }
 }
 
@@ -1942,9 +1960,8 @@ textarea.field-control { min-height: 96px; resize: vertical; line-height: 1.5; }
 
 @media (prefers-reduced-motion: reduce) {
   .reward--points::before,
-  .reward-flame .flame-outer,
-  .reward-flame .flame-inner,
-  .reward-flame .flame-core { animation: none; }
+  .reward-star svg,
+  .points-badge-star svg { animation: none; }
 }
 
 /* Administration (admin.html): one tool per row, in the student's own order.
@@ -2033,6 +2050,9 @@ textarea.field-control { min-height: 96px; resize: vertical; line-height: 1.5; }
 .user-edit { padding-top: var(--space-5); border-top: 1.5px solid rgba(32, 30, 27, 0.15); }
 .user-edit[hidden] { display: none; }
 .user-edit-title { font-size: 1.1rem; }
+.user-points-head { display: flex; align-items: center; gap: var(--space-3); }
+.user-points-fields { display: grid; gap: var(--space-4); }
+@media (min-width: 560px) { .user-points-fields { grid-template-columns: 160px 1fr; } }
 
 /* Schools (mokyklos.html): same list as Vartotojai, with the subscription
    line coloured when it ends soon or has ended. */

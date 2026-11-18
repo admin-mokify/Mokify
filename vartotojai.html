@@ -97,6 +97,30 @@
           <p class="account-bio" id="user-bio" hidden></p>
           <dl class="account-details" id="user-details"></dl>
 
+          <form class="auth-form user-edit user-points" id="user-points-form" novalidate>
+            <div class="user-points-head">
+              <h3 class="user-edit-title">Taškai</h3>
+              <span class="points-slot" id="user-points-badge"></span>
+            </div>
+            <div class="user-points-fields">
+              <div class="field">
+                <label class="field-label" for="user-points-amount">Kiek taškų</label>
+                <input class="field-control" type="number" id="user-points-amount" min="1" max="100000" step="1" value="10" inputmode="numeric" aria-describedby="user-points-amount-error">
+                <p class="field-error" id="user-points-amount-error"></p>
+              </div>
+              <div class="field">
+                <label class="field-label" for="user-points-note">Priežastis (neprivaloma)</label>
+                <input class="field-control" type="text" id="user-points-note" maxlength="200" autocomplete="off">
+              </div>
+            </div>
+            <p class="form-error" id="user-points-error" role="alert"></p>
+            <p class="form-done" id="user-points-done" role="status"></p>
+            <div class="account-edit-actions">
+              <button type="submit" class="btn btn-primary" id="user-points-add">Pridėti</button>
+              <button type="button" class="btn btn-ghost btn-danger-ghost" id="user-points-remove">Atimti</button>
+            </div>
+          </form>
+
           <form class="auth-form user-edit" id="user-form" novalidate>
             <h3 class="user-edit-title">Keisti duomenis</h3>
             <div class="field">
