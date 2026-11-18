@@ -1391,6 +1391,9 @@ function initAccountPage() {
     showProfile(profile);
     initTeacherCard(teacher, school);
     initAccountRewards(session, Boolean(teacher));
+    fetchUserTitles(session, [session.user && session.user.id]).then((titles) => {
+      showTitles(document.getElementById('account-titles'), titles.get(session.user.id));
+    });
     setText('account-school', school === undefined ? 'Nepavyko įkelti' : school && school.name);
     if (school && !school.active) {
       showBanner(
@@ -4075,6 +4078,262 @@ function initUsersPage() {
   });
   pointsRemove.addEventListener('click', () => adjustPoints(-1, pointsRemove));
 
+  // --- Titles (supabase/updates/2026-11-26-titles.sql) -------------------------
+  // The open user's titles show beside their name. "Keisti titulus" opens a
+  // window with every title: give or take away each one, change it, or make a
+  // new one (name, colour, icon).
+
+  const titlesSection = document.getElementById('user-titles-section');
+  const titlesDialog = document.getElementById('titles-dialog');
+  const titlesList = document.getElementById('titles-list');
+  const titlesEmpty = document.getElementById('titles-empty');
+  const titlesError = document.getElementById('titles-error');
+  const titlesBrowse = document.getElementById('titles-browse');
+  const titleForm = document.getElementById('title-form');
+  const titleName = document.getElementById('title-name');
+  const titleColor = document.getElementById('title-color');
+  const titleColorText = document.getElementById('title-color-text');
+  const titleIcons = document.getElementById('title-icons');
+  const titlePreview = document.getElementById('title-preview');
+  const titleFormError = document.getElementById('title-form-error');
+  const titleSave = document.getElementById('title-save');
+  const titleDelete = document.getElementById('title-delete');
+  const TITLE_ERRORS = {
+    bad_name: 'Pavadinimas turi būti nuo 1 iki 40 simbolių.',
+    bad_color: 'Spalva turi būti tokia: #ff8800.',
+    bad_icon: 'Pasirink piktogramą iš sąrašo.',
+    name_taken: 'Titulas tokiu pavadinimu jau yra.',
+    not_found: 'Šio titulo nebėra.',
+    too_many: 'Vienas vartotojas gali turėti iki 10 titulų.',
+  };
+  let allTitles = [];
+  let userTitles = [];
+  let editing = null; // the title being changed, or null for a new one
+  let deleteArmed = false;
+
+  // The icon choice: "none" and every icon, as radio buttons.
+  const iconChoices = [['', 'Be piktogramos', '']].concat(TITLE_ICONS).map(([key, label]) => {
+    const input = document.createElement('input');
+    input.type = 'radio';
+    input.name = 'title-icon';
+    input.value = key;
+    input.id = `title-icon-${key || 'none'}`;
+    input.className = 'title-icon-input';
+    const lab = document.createElement('label');
+    lab.htmlFor = input.id;
+    lab.className = 'title-icon';
+    lab.title = label;
+    const svg = buildTitleIcon(key);
+    if (svg) lab.appendChild(svg);
+    else lab.appendChild(textEl('span', 'title-icon-none', '–'));
+    lab.appendChild(textEl('span', 'sr-only', label));
+    titleIcons.append(input, lab);
+    input.addEventListener('change', updatePreview);
+    return input;
+  });
+  const chosenIcon = () => (iconChoices.find((i) => i.checked) || { value: '' }).value || null;
+
+  function formValues() {
+    return {
+      name: titleName.value.trim().replace(/\s+/g, ' '),
+      color: titleColorText.value.trim().toLowerCase(),
+      icon: chosenIcon(),
+    };
+  }
+  function updatePreview() {
+    const v = formValues();
+    titlePreview.replaceChildren(buildTitleChip({ name: v.name || 'Titulas', color: TITLE_COLOR.test(v.color) ? v.color : titleColor.value, icon: v.icon }));
+  }
+  titleName.addEventListener('input', updatePreview);
+  titleColor.addEventListener('input', () => {
+    titleColorText.value = titleColor.value;
+    setFieldError(titleColorText, '');
+    updatePreview();
+  });
+  titleColorText.addEventListener('input', () => {
+    let v = titleColorText.value.trim();
+    if (/^[0-9a-f]{6}$/i.test(v)) v = `#${v}`;
+    if (TITLE_COLOR.test(v)) titleColor.value = v.toLowerCase();
+    updatePreview();
+  });
+
+  const hasTitle = (t) => userTitles.some((x) => x.id === t.id);
+
+  function renderTitles() {
+    showTitles(document.getElementById('user-titles'), userTitles);
+    titlesEmpty.hidden = allTitles.length > 0;
+    titlesList.replaceChildren(...allTitles.map((t) => {
+      const li = document.createElement('li');
+      li.className = 'titles-row';
+      const info = document.createElement('div');
+      info.className = 'titles-info';
+      const n = Number(t.users) || 0;
+      info.append(buildTitleChip(t), textEl('span', 'text-muted titles-count', `${n} ${pluralLt(n, 'vartotojas', 'vartotojai', 'vartotojų')}`));
+      const on = hasTitle(t);
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = on ? 'btn btn-ghost btn-sm btn-danger-ghost' : 'btn btn-primary btn-sm';
+      toggle.textContent = on ? 'Atimti' : 'Suteikti';
+      toggle.addEventListener('click', () => setTitle(t, !on, toggle));
+      const edit = document.createElement('button');
+      edit.type = 'button';
+      edit.className = 'title-edit';
+      edit.setAttribute('aria-label', `Redaguoti titulą „${t.name}“`);
+      edit.title = 'Redaguoti titulą';
+      edit.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg>';
+      edit.addEventListener('click', () => openTitleForm(t));
+      li.append(info, toggle, edit);
+      return li;
+    }));
+  }
+
+  async function loadUserTitles(row) {
+    titlesSection.hidden = true;
+    showTitles(document.getElementById('user-titles'), []);
+    const res = await rpc('user_titles', { p_ids: [row.id] });
+    if (open !== row || !Array.isArray(res)) return; // database not updated yet: no titles section
+    userTitles = res;
+    showTitles(document.getElementById('user-titles'), userTitles);
+    titlesSection.hidden = false;
+  }
+
+  async function setTitle(t, on, btn) {
+    if (!open) return;
+    const row = open;
+    showBanner(titlesError, '');
+    setBusy(btn, true, 'Saugoma…');
+    const res = await rpc('admin_set_title', { p_user: row.id, p_title: t.id, p_on: on });
+    setBusy(btn, false);
+    if (open !== row) return;
+    if (!res.ok) {
+      showBanner(titlesError, TITLE_ERRORS[res.error] || USERS_ERRORS[res.error] || USERS_ERRORS.failed);
+      if (res.error === 'not_found') loadAllTitles();
+      return;
+    }
+    const before = hasTitle(t);
+    userTitles = Array.isArray(res.titles) ? res.titles : [];
+    const after = hasTitle(t);
+    if (before !== after) t.users = Math.max(0, (Number(t.users) || 0) + (after ? 1 : -1));
+    renderTitles();
+  }
+
+  async function loadAllTitles() {
+    const res = await rpc('admin_titles', {});
+    if (!res.ok) {
+      showBanner(titlesError, TITLE_ERRORS[res.error] || USERS_ERRORS[res.error] || USERS_ERRORS.failed);
+      return;
+    }
+    allTitles = Array.isArray(res.titles) ? res.titles : [];
+    renderTitles();
+  }
+
+  function showBrowse() {
+    titleForm.hidden = true;
+    titlesBrowse.hidden = false;
+    editing = null;
+  }
+
+  function openTitleForm(t) {
+    editing = t || null;
+    deleteArmed = false;
+    titleDelete.textContent = 'Ištrinti titulą';
+    titleDelete.hidden = !t;
+    showBanner(titleFormError, '');
+    showBanner(titlesError, '');
+    setFieldError(titleName, '');
+    setFieldError(titleColorText, '');
+    document.getElementById('title-form-title').textContent = t ? 'Keisti titulą' : 'Naujas titulas';
+    titleName.value = t ? t.name : '';
+    const color = t && TITLE_COLOR.test(t.color) ? t.color.toLowerCase() : '#ffe45c';
+    titleColor.value = color;
+    titleColorText.value = color;
+    const icon = t && TITLE_ICON_MAP.has(t.icon) ? t.icon : '';
+    iconChoices.forEach((i) => { i.checked = i.value === icon; });
+    updatePreview();
+    titlesBrowse.hidden = true;
+    titleForm.hidden = false;
+    titleName.focus();
+  }
+
+  document.getElementById('user-titles-open').addEventListener('click', () => {
+    if (!open) return;
+    document.getElementById('titles-for').textContent = `Vartotojas: ${open.full_name} (@${open.username})`;
+    showBanner(titlesError, '');
+    showBrowse();
+    renderTitles();
+    titlesDialog.showModal();
+    loadAllTitles();
+  });
+  document.getElementById('titles-close').addEventListener('click', () => titlesDialog.close());
+  document.getElementById('titles-new').addEventListener('click', () => openTitleForm(null));
+  document.getElementById('title-cancel').addEventListener('click', showBrowse);
+  titlesDialog.addEventListener('click', (e) => {
+    if (e.target === titlesDialog) titlesDialog.close();
+  });
+
+  titleForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    showBanner(titleFormError, '');
+    setFieldError(titleName, '');
+    setFieldError(titleColorText, '');
+    let v = formValues();
+    if (/^[0-9a-f]{6}$/i.test(v.color)) v = { ...v, color: `#${v.color}` };
+    let ok = true;
+    if (v.name.length < 1 || v.name.length > 40) {
+      setFieldError(titleName, TITLE_ERRORS.bad_name);
+      ok = false;
+    }
+    if (!TITLE_COLOR.test(v.color)) {
+      setFieldError(titleColorText, TITLE_ERRORS.bad_color);
+      ok = false;
+    }
+    if (!ok) return;
+    setBusy(titleSave, true, 'Saugoma…');
+    const res = await rpc('admin_save_title', { p_id: editing ? editing.id : null, p_name: v.name, p_color: v.color, p_icon: v.icon });
+    setBusy(titleSave, false);
+    if (!res.ok || !res.title) {
+      if (res.error === 'bad_name' || res.error === 'name_taken') setFieldError(titleName, TITLE_ERRORS[res.error]);
+      else if (res.error === 'bad_color') setFieldError(titleColorText, TITLE_ERRORS.bad_color);
+      else showBanner(titleFormError, TITLE_ERRORS[res.error] || USERS_ERRORS[res.error] || USERS_ERRORS.failed);
+      return;
+    }
+    const saved = res.title;
+    const i = allTitles.findIndex((t) => t.id === saved.id);
+    if (i >= 0) allTitles[i] = saved;
+    else allTitles.push(saved);
+    allTitles.sort((a, b) => a.name.localeCompare(b.name, 'lt'));
+    userTitles = userTitles.map((t) => (t.id === saved.id ? saved : t));
+    showBrowse();
+    renderTitles();
+  });
+
+  // Deleting asks once more in the button itself, saying how many have it.
+  titleDelete.addEventListener('click', async () => {
+    if (!editing) return;
+    if (!deleteArmed) {
+      deleteArmed = true;
+      const n = Number(editing.users) || 0;
+      showBanner(titleFormError, n
+        ? `Titulas bus atimtas iš ${n} ${pluralLt(n, 'vartotojo', 'vartotojų', 'vartotojų')}.`
+        : 'Šio titulo dar niekas neturi.');
+      titleDelete.textContent = 'Taip, ištrinti';
+      return;
+    }
+    const t = editing;
+    setBusy(titleDelete, true, 'Trinama…');
+    const res = await rpc('admin_delete_title', { p_id: t.id });
+    setBusy(titleDelete, false);
+    if (!res.ok && res.error !== 'not_found') {
+      showBanner(titleFormError, USERS_ERRORS[res.error] || USERS_ERRORS.failed);
+      return;
+    }
+    allTitles = allTitles.filter((x) => x.id !== t.id);
+    userTitles = userTitles.filter((x) => x.id !== t.id);
+    showBanner(titleFormError, '');
+    showBrowse();
+    renderTitles();
+  });
+
   async function showUser(row) {
     open = row;
     clearFormErrors();
@@ -4083,6 +4342,8 @@ function initUsersPage() {
     setFieldError(pointsAmount, '');
     pointsNote.value = '';
     pointsForm.hidden = true;
+    userTitles = [];
+    loadUserTitles(row);
     fillHeader(row);
     document.getElementById('user-avatar').src = DEFAULT_AVATAR;
     document.getElementById('user-teacher-mark').hidden = !row.teacher;
@@ -4644,7 +4905,7 @@ function buildQr(text) {
 
 // A gold star with a light shine on its upper half.
 let starCount = 0;
-function buildStar() {
+function buildStar({ shine = true } = {}) {
   starCount += 1;
   const id = `star-${starCount}`;
   const svg = svgEl('svg', { viewBox: '0 0 24 24', 'aria-hidden': 'true' });
@@ -4660,8 +4921,8 @@ function buildStar() {
   svg.append(
     defs,
     svgEl('path', { class: 'star-shape', d: points, fill: `url(#${id})`, stroke: '#B97200', 'stroke-width': '0.9', 'stroke-linejoin': 'round' }),
-    svgEl('path', { class: 'star-shine', d: 'M12 4.6l1.9 4.05 3.3.4L12 10.6 6.8 9.05l3.3-.4z', fill: '#FFF7CC', opacity: '0.85' }),
   );
+  if (shine) svg.appendChild(svgEl('path', { class: 'star-shine', d: 'M12 4.6l1.9 4.05 3.3.4L12 10.6 6.8 9.05l3.3-.4z', fill: '#FFF7CC', opacity: '0.85' }));
   return svg;
 }
 
@@ -4689,19 +4950,18 @@ const textEl = (tag, className, text) => {
   return el;
 };
 
-// The round points badge beside a name: a star over the total.
+// The points badge beside a name: a big gold star with the total inside it
+// (the number gets smaller as it gets longer, so it stays inside the star).
 function buildPointsBadge(total) {
   const value = Number(total) || 0;
   const badge = document.createElement('span');
   badge.className = 'points-badge';
+  badge.dataset.digits = String(Math.min(6, String(value).length));
   badge.setAttribute('role', 'img');
   badge.setAttribute('aria-label', `${value} ${pluralLt(value, 'taškas', 'taškai', 'taškų')}`);
   badge.title = badge.getAttribute('aria-label');
-  const star = document.createElement('span');
-  star.className = 'points-badge-star';
-  star.appendChild(buildStar());
   const number = textEl('span', 'points-badge-value', '0');
-  badge.append(star, number);
+  badge.append(buildStar({ shine: false }), number);
   countUp(number, value);
   return badge;
 }
@@ -4776,6 +5036,99 @@ function buildHoursCert(code) {
   });
   cert.append(link, copy);
   return cert;
+}
+
+// --- Custom titles (supabase/updates/2026-11-26-titles.sql) -----------------
+// Made up by an admin in vartotojai.html: a name, a colour and one of these
+// icons, shown beside names like "Registruotas mokytojas". Icon drawings in
+// the style of Feather/Lucide (24×24, stroked).
+const TITLE_ICONS = [
+  ['star', 'Žvaigždė', '<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/>'],
+  ['heart', 'Širdis', '<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>'],
+  ['crown', 'Karūna', '<path d="M3 8l4 4 5-7 5 7 4-4-2 11H5z"/>'],
+  ['shield', 'Skydas', '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/>'],
+  ['trophy', 'Taurė', '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2z"/>'],
+  ['award', 'Medalis', '<circle cx="12" cy="8" r="7"/><path d="M8.21 13.89L7 23l5-3 5 3-1.21-9.12"/>'],
+  ['zap', 'Žaibas', '<path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>'],
+  ['flame', 'Ugnis', '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>'],
+  ['rocket', 'Raketa', '<path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>'],
+  ['sparkles', 'Kibirkštys', '<path d="M11 3l1.8 5.2L18 10l-5.2 1.8L11 17l-1.8-5.2L4 10l5.2-1.8z"/><path d="M19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8z"/>'],
+  ['gem', 'Brangakmenis', '<path d="M6 3h12l4 6-10 13L2 9z"/><path d="M11 3L8 9l4 13 4-13-3-6"/><path d="M2 9h20"/>'],
+  ['bug', 'Vabalas', '<rect x="8" y="6" width="8" height="14" rx="4"/><path d="M12 20v-9"/><path d="M8 13H4"/><path d="M20 13h-4"/><path d="M8 9.5L5 7"/><path d="M16 9.5L19 7"/><path d="M8 17l-3 2"/><path d="M16 17l3 2"/><path d="M10 6L9 3"/><path d="M14 6l1-3"/>'],
+  ['code', 'Kodas', '<path d="M16 18l6-6-6-6"/><path d="M8 6l-6 6 6 6"/>'],
+  ['wrench', 'Raktas', '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>'],
+  ['book', 'Knyga', '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>'],
+  ['graduation-cap', 'Kepurė', '<path d="M22 10v6"/><path d="M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>'],
+  ['lightbulb', 'Lemputė', '<path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/>'],
+  ['megaphone', 'Garsiakalbis', '<path d="M3 11v2a1 1 0 0 0 1 1h3l9 5V5L7 10H4a1 1 0 0 0-1 1z"/><path d="M7 14l1.5 6H11l-1-5.2"/><path d="M19.5 9a4 4 0 0 1 0 6"/>'],
+  ['flag', 'Vėliava', '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/>'],
+  ['globe', 'Gaublys', '<circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>'],
+  ['music', 'Muzika', '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>'],
+  ['palette', 'Paletė', '<path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.93 0 1.65-.75 1.65-1.69 0-.44-.18-.84-.44-1.13-.29-.29-.44-.65-.44-1.13a1.64 1.64 0 0 1 1.67-1.67h2c3.05 0 5.55-2.5 5.55-5.55C21.97 6.01 17.46 2 12 2z"/><circle cx="13.5" cy="6.5" r="1"/><circle cx="17.5" cy="10.5" r="1"/><circle cx="8.5" cy="7.5" r="1"/><circle cx="6.5" cy="12.5" r="1"/>'],
+  ['gamepad', 'Žaidimai', '<rect x="2" y="7" width="20" height="11" rx="5"/><path d="M7 10.5v4"/><path d="M5 12.5h4"/><path d="M15.5 11.5h.01"/><path d="M18 13.5h.01"/>'],
+  ['leaf', 'Lapas', '<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>'],
+  ['sun', 'Saulė', '<circle cx="12" cy="12" r="4.5"/><path d="M12 1.5v2.5"/><path d="M12 20v2.5"/><path d="M4.57 4.57l1.77 1.77"/><path d="M17.66 17.66l1.77 1.77"/><path d="M1.5 12H4"/><path d="M20 12h2.5"/><path d="M4.57 19.43l1.77-1.77"/><path d="M17.66 6.34l1.77-1.77"/>'],
+  ['smile', 'Šypsena', '<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01"/><path d="M15 9h.01"/>'],
+  ['coffee', 'Kava', '<path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><path d="M6 1v3"/><path d="M10 1v3"/><path d="M14 1v3"/>'],
+  ['check', 'Varnelė', '<circle cx="12" cy="12" r="10"/><path d="M8 12.5l2.8 2.8L16.5 9"/>'],
+];
+const TITLE_ICON_MAP = new Map(TITLE_ICONS.map(([key, label, markup]) => [key, { label, markup }]));
+
+// One icon (our own fixed drawings above; unknown names give nothing).
+function buildTitleIcon(key) {
+  const icon = TITLE_ICON_MAP.get(key);
+  if (!icon) return null;
+  const svg = svgEl('svg', {
+    viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2.2',
+    'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true',
+  });
+  svg.innerHTML = icon.markup;
+  return svg;
+}
+
+const TITLE_COLOR = /^#[0-9a-f]{6}$/i;
+// Dark ink or white text, whichever reads better on the title's colour.
+function titleTextColor(hex) {
+  const lin = (i) => {
+    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  const l = 0.2126 * lin(1) + 0.7152 * lin(3) + 0.0722 * lin(5);
+  const ink = 0.0137; // #201E1B
+  return (l + 0.05) / (ink + 0.05) >= 1.05 / (l + 0.05) ? '#201E1B' : '#FFFFFF';
+}
+
+// A title sticker: same shape as "Registruotas mokytojas", in its own colour.
+function buildTitleChip(t) {
+  const chip = document.createElement('span');
+  chip.className = 'teacher-mark title-mark';
+  const color = TITLE_COLOR.test(t.color || '') ? t.color : '#FFE45C';
+  chip.style.setProperty('--title-bg', color);
+  chip.style.setProperty('--title-fg', titleTextColor(color));
+  const icon = buildTitleIcon(t.icon);
+  if (icon) chip.appendChild(icon);
+  chip.appendChild(document.createTextNode(t.name || ''));
+  return chip;
+}
+
+// Users' titles: Map id -> [{ id, name, color, icon }], oldest first.
+async function fetchUserTitles(session, ids) {
+  const list = [...new Set(ids)].filter((id) => UUID_PATTERN.test(id || '')).slice(0, 500);
+  if (!session || !list.length) return new Map();
+  const res = await callApi('/rest/v1/rpc/user_titles', { body: { p_ids: list }, token: session.access_token });
+  const map = new Map();
+  if (!res.ok || !Array.isArray(res.data)) return map;
+  res.data.forEach((r) => {
+    if (!map.has(r.user_id)) map.set(r.user_id, []);
+    map.get(r.user_id).push(r);
+  });
+  return map;
+}
+
+// Fills a name row's title slot.
+function showTitles(slot, titles) {
+  if (!slot) return;
+  slot.replaceChildren(...(titles || []).map(buildTitleChip));
 }
 
 // --- Ratings after a lesson (supabase/updates/2026-11-25-ratings.sql) -------
@@ -4971,39 +5324,27 @@ async function initVerifyPage() {
   note.hidden = false;
 }
 
-// paskyra.html: the points total, and for teachers (or anyone who has some)
-// the social hours, whose certificates open in a window.
+// paskyra.html: the points star beside the name, and for teachers (or anyone
+// who has some) the social hours as a detail line, whose certificates open in
+// a window.
 async function initAccountRewards(session, isTeacher) {
-  const box = document.getElementById('account-rewards');
-  if (!box) return;
+  const slot = document.getElementById('account-points');
+  if (!slot) return;
   const ask = (fn) => callApi(`/rest/v1/rpc/${fn}`, { body: {}, token: session.access_token })
     .then((res) => (res.ok && res.data && res.data.ok === true ? res.data : null));
   const [points, hours] = await Promise.all([ask('my_points'), ask('my_social_hours')]);
-  // The points: a round badge beside the name.
-  const slot = document.getElementById('account-points');
-  if (points && slot) {
+  if (points) {
     slot.replaceChildren(buildPointsBadge(points.total));
     slot.hidden = false;
   }
-  const cards = [];
   const items = hours && Array.isArray(hours.items) ? hours.items : [];
   if (hours && (isTeacher || items.length)) {
-    let button = null;
-    if (items.length) {
-      button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'btn btn-ghost btn-sm';
-      button.textContent = 'Pažymos';
-      button.addEventListener('click', () => showHoursCertificates(items));
-    }
-    cards.push(buildHoursReward({
-      minutes: hours.minutes,
-      sub: items.length ? `Už ${items.length} ${pluralLt(items.length, 'pamoką', 'pamokas', 'pamokų')}` : 'Už vedamas pamokas',
-      button,
-    }));
+    document.getElementById('account-hours').textContent = `${formatHours(hours.minutes)} val.`;
+    const button = document.getElementById('account-hours-open');
+    button.hidden = !items.length;
+    button.onclick = () => showHoursCertificates(items);
+    document.getElementById('account-hours-row').hidden = false;
   }
-  box.replaceChildren(...cards);
-  box.hidden = !cards.length;
 }
 
 // The certificates window: one line per lesson; choosing one shows its QR
@@ -5608,6 +5949,7 @@ function initChat() {
     document.getElementById('profile-name').textContent = p.full_name;
     document.getElementById('profile-username').textContent = p.username ? `@${p.username}` : '';
     document.getElementById('profile-teacher-mark').hidden = !p.is_teacher;
+    showTitles(document.getElementById('profile-titles'), p.titles);
     const bio = document.getElementById('profile-bio');
     bio.textContent = p.bio || '';
     bio.hidden = !p.bio;
@@ -5644,12 +5986,13 @@ function initChat() {
       return;
     }
     fillProfile(full);
-    // A teacher: students' rating of them.
-    if (full.is_teacher) {
-      const ratings = await fetchTeacherRatings(session, [partner.id]);
-      if (current === partner && profileDialog.open && ratings.has(partner.id)) {
-        fillProfile({ ...full, rating: ratings.get(partner.id) });
-      }
+    // Their titles, and for a teacher, students' rating of them.
+    const [titles, ratings] = await Promise.all([
+      fetchUserTitles(session, [partner.id]),
+      full.is_teacher ? fetchTeacherRatings(session, [partner.id]) : new Map(),
+    ]);
+    if (current === partner && profileDialog.open && (titles.has(partner.id) || ratings.has(partner.id))) {
+      fillProfile({ ...full, titles: titles.get(partner.id), rating: ratings.get(partner.id) });
     }
   });
   // Clicking the dimmed area around the window closes it.

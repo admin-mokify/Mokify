@@ -1897,27 +1897,51 @@ textarea.field-control { min-height: 96px; resize: vertical; line-height: 1.5; }
 .reward-star { flex-shrink: 0; width: 72px; height: 72px; }
 .reward-star svg { width: 100%; height: 100%; overflow: visible; animation: star-twinkle 3s ease-in-out infinite; }
 
-/* The round badge beside a name (account page). */
+/* The points star beside a name: the total sits inside a big gold star,
+   stamped like the rest of the site. The number shrinks as it gets longer. */
 .points-slot { display: inline-flex; }
 .points-slot[hidden] { display: none; }
 .points-badge {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-width: 64px;
-  height: 64px;
-  padding: 0 var(--space-2);
-  border: 2px solid #C98A0B;
-  border-radius: 999px;
-  background: radial-gradient(circle at 32% 25%, #FFF7D1 0%, #FFD964 50%, #F5B21E 100%);
-  box-shadow: var(--stamp-sm), inset 0 -3px 0 rgba(150, 90, 0, 0.18);
-  color: #5A3A00;
-  line-height: 1;
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 88px;
+  height: 88px;
+  filter: drop-shadow(2px 2px 0 var(--ink-900));
 }
-.points-badge-star { width: 20px; height: 20px; }
-.points-badge-star svg { width: 100%; height: 100%; animation: star-twinkle 3s ease-in-out infinite; }
-.points-badge-value { font-family: var(--font-hero); font-weight: 700; font-size: 1.05rem; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.points-badge svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  animation: star-breathe 3s ease-in-out infinite;
+}
+.points-badge-value {
+  position: relative;
+  margin-top: 9%;
+  color: #5A3A00;
+  font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: 1.35rem;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 0 rgba(255, 247, 204, 0.9);
+}
+.points-badge[data-digits="3"] .points-badge-value { font-size: 1.15rem; }
+.points-badge[data-digits="4"] .points-badge-value { font-size: 0.95rem; }
+.points-badge[data-digits="5"] .points-badge-value { font-size: 0.8rem; }
+.points-badge[data-digits="6"] .points-badge-value { font-size: 0.68rem; }
+@keyframes star-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+/* Social hours on the account page: a normal detail line with the
+   certificates button after the number. */
+.account-hours { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
 
 @keyframes star-twinkle {
   0%, 100% { transform: rotate(0deg) scale(1); }
@@ -1994,7 +2018,7 @@ textarea.field-control { min-height: 96px; resize: vertical; line-height: 1.5; }
 @media (prefers-reduced-motion: reduce) {
   .reward--points::before,
   .reward-star svg,
-  .points-badge-star svg { animation: none; }
+  .points-badge svg { animation: none; }
 }
 
 /* Administration (admin.html): one tool per row, in the student's own order.
@@ -2084,6 +2108,73 @@ textarea.field-control { min-height: 96px; resize: vertical; line-height: 1.5; }
 .user-edit[hidden] { display: none; }
 .user-edit-title { font-size: 1.1rem; }
 .user-points-head { display: flex; align-items: center; gap: var(--space-3); }
+.user-titles-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); }
+
+/* Custom titles: the "Registruotas mokytojas" sticker in the admin's own
+   colour, with an optional icon. */
+.title-slot { display: contents; }
+.teacher-mark.title-mark { gap: 0.35rem; background: var(--title-bg); color: var(--title-fg); }
+.title-mark svg { width: 1em; height: 1em; flex-shrink: 0; }
+
+/* The titles window (vartotojai.html). */
+.titles-dialog { width: min(560px, calc(100vw - 32px)); }
+.titles-list { display: grid; gap: var(--space-2); margin: 0 0 var(--space-4); padding: 0; list-style: none; }
+.titles-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid rgba(32, 30, 27, 0.12);
+}
+.titles-info { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); flex: 1; min-width: 0; }
+.titles-info .title-mark { white-space: normal; overflow-wrap: anywhere; }
+.titles-count { font-size: 0.85rem; }
+.title-edit {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border: 1.5px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-900);
+  cursor: pointer;
+}
+.title-edit:hover { border-color: var(--ink-900); background: var(--paper-raised); }
+.title-form { display: grid; gap: var(--space-4); }
+.title-form[hidden], #titles-browse[hidden] { display: none; }
+.title-preview { display: flex; min-height: 34px; align-items: center; }
+.title-color { display: flex; gap: var(--space-2); align-items: center; }
+.title-color input[type="color"] {
+  flex-shrink: 0;
+  width: 52px;
+  height: 44px;
+  padding: 2px;
+  border: 1.5px solid var(--ink-900);
+  border-radius: var(--radius-sm);
+  background: var(--paper-raised);
+  cursor: pointer;
+}
+.title-color .field-control { max-width: 140px; font-family: ui-monospace, monospace; }
+.title-icons { display: grid; grid-template-columns: repeat(auto-fill, minmax(42px, 1fr)); gap: var(--space-2); }
+.title-icon-input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+.title-icon {
+  display: grid;
+  place-items: center;
+  height: 42px;
+  border: 1.5px solid rgba(32, 30, 27, 0.25);
+  border-radius: var(--radius-sm);
+  background: var(--paper-raised);
+  color: var(--ink-900);
+  cursor: pointer;
+}
+.title-icon svg { width: 22px; height: 22px; }
+.title-icon-none { font-weight: 700; }
+.title-icon:hover { border-color: var(--ink-900); }
+.title-icon-input:checked + .title-icon { border-color: var(--ink-900); background: var(--highlighter); box-shadow: var(--stamp-sm); }
+.title-icon-input:focus-visible + .title-icon { outline: 3px solid var(--pen-blue); outline-offset: 2px; }
+
 .user-points-fields { display: grid; gap: var(--space-4); }
 @media (min-width: 560px) { .user-points-fields { grid-template-columns: 160px 1fr; } }
 

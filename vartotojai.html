@@ -89,6 +89,7 @@
               <div class="account-name-row">
                 <h2 id="user-name"></h2>
                 <span class="teacher-mark" id="user-teacher-mark" hidden>Registruotas mokytojas</span>
+                <span class="title-slot" id="user-titles"></span>
               </div>
               <p class="text-muted" id="user-username"></p>
             </div>
@@ -96,6 +97,11 @@
 
           <p class="account-bio" id="user-bio" hidden></p>
           <dl class="account-details" id="user-details"></dl>
+
+          <div class="user-edit user-titles-row" id="user-titles-section" hidden>
+            <h3 class="user-edit-title">Titulai</h3>
+            <button type="button" class="btn btn-ghost btn-sm" id="user-titles-open">Keisti titulus</button>
+          </div>
 
           <form class="auth-form user-edit user-points" id="user-points-form" novalidate>
             <div class="user-points-head">
@@ -154,6 +160,51 @@
             <div class="account-edit-actions">
               <button type="submit" class="btn btn-primary" id="user-save">Išsaugoti</button>
               <button type="button" class="btn btn-ghost" id="user-close">Uždaryti</button>
+            </div>
+          </form>
+        </div>
+      </dialog>
+
+      <dialog class="confirm-dialog titles-dialog" id="titles-dialog" aria-labelledby="titles-title">
+        <div class="auth-form">
+          <h2 class="account-edit-title" id="titles-title">Titulai</h2>
+          <p class="text-muted" id="titles-for"></p>
+          <p class="form-error" id="titles-error" role="alert"></p>
+
+          <div id="titles-browse">
+            <ul class="titles-list" id="titles-list" aria-labelledby="titles-title"></ul>
+            <p class="text-muted" id="titles-empty" hidden>Titulų dar nėra.</p>
+            <div class="account-edit-actions">
+              <button type="button" class="btn btn-primary" id="titles-new">Naujas titulas</button>
+              <button type="button" class="btn btn-ghost" id="titles-close">Uždaryti</button>
+            </div>
+          </div>
+
+          <form class="title-form" id="title-form" novalidate hidden>
+            <h3 class="user-edit-title" id="title-form-title">Naujas titulas</h3>
+            <div class="title-preview" aria-hidden="true" id="title-preview"></div>
+            <div class="field">
+              <label class="field-label" for="title-name">Pavadinimas</label>
+              <input class="field-control" type="text" id="title-name" maxlength="40" autocomplete="off" aria-describedby="title-name-error">
+              <p class="field-error" id="title-name-error"></p>
+            </div>
+            <div class="field">
+              <label class="field-label" for="title-color-text">Spalva</label>
+              <div class="title-color">
+                <input type="color" id="title-color" value="#ffe45c" aria-label="Pasirinkti spalvą">
+                <input class="field-control" type="text" id="title-color-text" maxlength="7" autocomplete="off" spellcheck="false" value="#ffe45c" aria-describedby="title-color-error">
+              </div>
+              <p class="field-error" id="title-color-error"></p>
+            </div>
+            <fieldset class="form-section">
+              <legend class="form-section-title">Piktograma</legend>
+              <div class="title-icons" id="title-icons"></div>
+            </fieldset>
+            <p class="form-error" id="title-form-error" role="alert"></p>
+            <div class="account-edit-actions">
+              <button type="submit" class="btn btn-primary" id="title-save">Išsaugoti</button>
+              <button type="button" class="btn btn-ghost" id="title-cancel">Atšaukti</button>
+              <button type="button" class="btn btn-ghost btn-danger-ghost" id="title-delete" hidden>Ištrinti titulą</button>
             </div>
           </form>
         </div>
