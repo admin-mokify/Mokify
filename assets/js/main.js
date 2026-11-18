@@ -23,6 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initUsersPage();
   initSchoolsPage();
   initVerifyPage();
+  initLeaderboardPage();
   initNotifications();
 });
 
@@ -5322,6 +5323,229 @@ async function initVerifyPage() {
   details.hidden = false;
   note.textContent = 'Valandos skiriamos moksleiviui, kuris Mokify platformoje vedė pamoką kitam moksleiviui ir ji įvyko iki galo.';
   note.hidden = false;
+}
+
+// lyderiai.html: everyone with points, most first. Open to anyone (also not
+// logged in): the top three on a podium, the rest in a list that loads more
+// while scrolling, a search that keeps real places, and a profile window with
+// what students show to everyone (supabase/updates/2026-11-27-leaderboard.sql).
+function initLeaderboardPage() {
+  const page = document.getElementById('leaderboard');
+  if (!page) return;
+  const PAGE_SIZE = 30;
+  const search = document.getElementById('lb-search');
+  const podium = document.getElementById('lb-podium');
+  const list = document.getElementById('lb-list');
+  const count = document.getElementById('lb-count');
+  const error = document.getElementById('lb-error');
+  const more = document.getElementById('lb-more');
+  const meLine = document.getElementById('lb-me');
+  const dialog = document.getElementById('lb-dialog');
+  const dialogError = document.getElementById('lb-dialog-error');
+  let loaded = 0;
+  let total = 0;
+  let busy = false;
+  let token = 0;
+  let current = null;
+
+  const safeAvatar = (a) => (typeof a === 'string' && (a === DEFAULT_AVATAR || a.startsWith('data:image/jpeg;base64,')) ? a : DEFAULT_AVATAR);
+  const pointsWord = (n) => pluralLt(n, 'taškas', 'taškai', 'taškų');
+
+  async function ask(fn, body) {
+    const session = await getSession();
+    const res = await callApi(`/rest/v1/rpc/${fn}`, { body, token: session ? session.access_token : undefined });
+    if (res.ok && res.data && res.data.ok === true) return res.data;
+    if (res.status === 0 || res.unconfigured) return { ok: false, error: 'network' };
+    return { ok: false, error: (res.data && res.data.error) || (res.status === 404 ? 'missing' : 'failed') };
+  }
+
+  const avatarImg = (src, size) => {
+    const img = document.createElement('img');
+    img.src = safeAvatar(src);
+    img.alt = '';
+    img.width = size;
+    img.height = size;
+    img.loading = 'lazy';
+    return img;
+  };
+
+  // A small star and the number, for list rows.
+  const pointsTag = (n) => {
+    const span = document.createElement('span');
+    span.className = 'lb-points';
+    const star = document.createElement('span');
+    star.className = 'lb-points-star';
+    star.appendChild(buildStar({ shine: false }));
+    span.append(star, textEl('span', 'lb-points-value', String(n)));
+    span.appendChild(textEl('span', 'sr-only', ` ${pointsWord(n)}`));
+    return span;
+  };
+
+  // i: 0-2, the step on the podium (equal points can share a place number).
+  function podiumCard(item, i) {
+    const li = document.createElement('li');
+    li.className = `lb-step lb-step--${i + 1} lb-medal--${Math.min(3, item.place)}`;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'lb-step-card';
+    const frame = document.createElement('span');
+    frame.className = 'avatar-frame lb-step-avatar';
+    frame.appendChild(avatarImg(item.avatar, 88));
+    b.append(
+      textEl('span', 'lb-step-place', `${item.place}`),
+      frame,
+      textEl('span', 'lb-step-name', item.name),
+      textEl('span', 'lb-step-user text-muted', `@${item.username}`),
+      pointsTag(item.points),
+    );
+    b.setAttribute('aria-label', `${item.place} vieta: ${item.name}, ${item.points} ${pointsWord(item.points)}`);
+    b.addEventListener('click', () => openProfile(item));
+    li.appendChild(b);
+    return li;
+  }
+
+  function listRow(item) {
+    const li = document.createElement('li');
+    li.className = 'lb-row';
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'lb-open';
+    const frame = document.createElement('span');
+    frame.className = 'avatar-frame lb-row-avatar';
+    frame.appendChild(avatarImg(item.avatar, 44));
+    const who = document.createElement('span');
+    who.className = 'lb-who';
+    const name = textEl('span', 'lb-name', item.name);
+    if (item.teacher) name.append(' ', textEl('span', 'users-roles', 'Mokytojas'));
+    who.append(name, textEl('span', 'lb-user text-muted', `@${item.username}`));
+    b.append(textEl('span', `lb-place${item.place <= 3 ? ` lb-place--${item.place}` : ''}`, `${item.place}.`), frame, who, pointsTag(item.points));
+    b.addEventListener('click', () => openProfile(item));
+    li.appendChild(b);
+    return li;
+  }
+
+  async function load(reset) {
+    if (busy && !reset) return;
+    const mine = reset ? ++token : token;
+    busy = true;
+    const query = search.value.trim();
+    if (reset) loaded = 0;
+    const res = await ask('leaderboard', { p_query: query || null, p_offset: loaded, p_limit: PAGE_SIZE });
+    if (mine !== token) return;
+    busy = false;
+    if (!res.ok) {
+      count.textContent = '';
+      more.hidden = true;
+      showBanner(error, res.error === 'network' ? NETWORK_FAILED_MSG
+        : res.error === 'missing' ? 'Lyderių lentelė dar neįjungta.'
+          : 'Nepavyko įkelti lyderių lentelės. Pabandyk dar kartą vėliau.');
+      return;
+    }
+    showBanner(error, '');
+    const items = Array.isArray(res.items) ? res.items : [];
+    total = Number(res.total) || 0;
+    if (reset) {
+      list.replaceChildren();
+      // No search: the first three stand on the podium, the list goes on after them.
+      const top = !query ? items.slice(0, 3) : [];
+      podium.replaceChildren(...top.map(podiumCard));
+      podium.hidden = !top.length;
+      list.append(...items.slice(top.length).map(listRow));
+      if (res.me) {
+        const p = Number(res.me.points) || 0;
+        meLine.textContent = `Tavo vieta: ${res.me.place}. Tu turi ${p} ${pointsWord(p)}.`;
+        meLine.hidden = false;
+      } else {
+        meLine.hidden = true;
+      }
+    } else {
+      list.append(...items.map(listRow));
+    }
+    loaded += items.length;
+    count.textContent = query
+      ? (total ? `Rasta: ${total}` : 'Nieko nerasta')
+      : (total ? `Iš viso: ${total} ${pluralLt(total, 'moksleivis', 'moksleiviai', 'moksleivių')}` : 'Taškų dar niekas neturi');
+    more.hidden = loaded >= total;
+  }
+
+  let searchTimer = 0;
+  search.addEventListener('input', () => {
+    window.clearTimeout(searchTimer);
+    searchTimer = window.setTimeout(() => load(true), 250);
+  });
+  document.getElementById('lb-search-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    window.clearTimeout(searchTimer);
+    load(true);
+  });
+  more.addEventListener('click', () => load(false));
+  // Loads the next page by itself when the end of the list comes into view.
+  if ('IntersectionObserver' in window) {
+    new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting) && !more.hidden) load(false);
+    }, { rootMargin: '400px 0px' }).observe(more);
+  }
+
+  // --- The profile window ---
+  const row = (label, value) => {
+    const div = document.createElement('div');
+    const dd = document.createElement('dd');
+    if (value instanceof Node) dd.appendChild(value);
+    else dd.textContent = value;
+    div.append(textEl('dt', '', label), dd);
+    return div;
+  };
+
+  function fill(u) {
+    document.getElementById('lb-avatar').src = safeAvatar(u.avatar);
+    document.getElementById('lb-name').textContent = u.name;
+    document.getElementById('lb-username').textContent = `@${u.username}`;
+    document.getElementById('lb-points').replaceChildren(buildPointsBadge(u.points));
+    document.getElementById('lb-teacher-mark').hidden = !u.teacher;
+    showTitles(document.getElementById('lb-titles'), u.titles);
+    const bio = document.getElementById('lb-bio');
+    bio.textContent = u.bio || '';
+    bio.hidden = !u.bio;
+    const rows = [row('Vieta', `${u.place}.`)];
+    if (u.school) rows.push(row('Mokykla', u.school));
+    if (u.grade) rows.push(row('Klasė', GRADE_LABELS[u.grade] || `${u.grade} klasė`));
+    const t = u.teacher && typeof u.teacher === 'object' ? u.teacher : null;
+    if (t) {
+      const subjects = Array.isArray(t.subjects) ? t.subjects : [];
+      const levels = Array.isArray(t.levels) ? t.levels : [];
+      rows.push(row(subjects.length === 1 ? 'Dalykas' : 'Dalykai', formatSubjects(subjects)));
+      rows.push(row('Moko', levels.map((key) => (LEVEL_LABELS[key] || key).replace(/ \(.*\)$/, '')).join(', ')));
+      if (t.rating && Number(t.rating.count) > 0) {
+        rows.push(row('Įvertinimas', ratingLine({ average: Number(t.rating.average), count: Number(t.rating.count) })));
+      }
+    }
+    if (u.lessons_taught !== undefined) rows.push(row('Vedė pamokų', String(Number(u.lessons_taught) || 0)));
+    if (u.lessons_learned !== undefined) rows.push(row('Dalyvavo pamokose', String(Number(u.lessons_learned) || 0)));
+    document.getElementById('lb-details').replaceChildren(...rows);
+  }
+
+  async function openProfile(item) {
+    current = item;
+    showBanner(dialogError, '');
+    // What the list already knows, right away; the rest once loaded.
+    fill({ ...item, titles: [] });
+    if (!dialog.open) dialog.showModal();
+    const res = await ask('leaderboard_profile', { p_user: item.id });
+    if (current !== item || !dialog.open) return;
+    if (!res.ok || !res.user) {
+      showBanner(dialogError, res.error === 'network' ? NETWORK_FAILED_MSG
+        : res.error === 'not_found' ? 'Šio moksleivio lyderių lentelėje nebėra.'
+          : 'Nepavyko įkelti profilio. Pabandyk dar kartą vėliau.');
+      return;
+    }
+    fill(res.user);
+  }
+  dialog.addEventListener('click', (e) => {
+    if (e.target === dialog) dialog.close();
+  });
+  dialog.addEventListener('close', () => { current = null; });
+
+  load(true);
 }
 
 // paskyra.html: the points star beside the name, and for teachers (or anyone

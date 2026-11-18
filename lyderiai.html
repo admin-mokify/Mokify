@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="lt" class="no-js">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lyderiai — Mokify</title>
+<meta name="description" content="Mokify lyderių lentelė: moksleiviai, surinkę daugiausia taškų už vestas ir lankytas pamokas.">
+<link rel="icon" href="assets/img/logo-mark.png">
+<link rel="stylesheet" href="assets/css/style.css">
+<script>document.documentElement.classList.replace('no-js','js');</script>
+</head>
+<body class="paper">
+
+<a class="skip-link" href="#main">Praleisti ir pereiti prie turinio</a>
+
+<header class="site-header">
+  <div class="container">
+    <div class="nav-shell">
+      <a href="index.html" class="brand">
+        <img src="assets/img/logo-mark.png" alt="" width="30" height="30">
+        Mokify
+      </a>
+
+      <nav class="nav-links" aria-label="Pagrindinis meniu">
+        <a href="apie.html">Apie</a>
+        <a href="lyderiai.html" aria-current="page">Lyderiai</a>
+        <a href="pagalba.html">Pagalba</a>
+      </nav>
+
+      <div class="nav-actions">
+        <div class="nav-cta-group">
+          <a href="prisijungti.html" class="btn btn-ghost">Prisijungti</a>
+          <a href="registracija.html" class="btn btn-primary">Pradėti</a>
+        </div>
+        <button class="nav-toggle" aria-label="Atidaryti meniu" aria-expanded="false" aria-controls="mobile-menu">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="mobile-menu" id="mobile-menu">
+      <a href="apie.html">Apie</a>
+      <a href="lyderiai.html" aria-current="page">Lyderiai</a>
+      <a href="pagalba.html">Pagalba</a>
+      <a href="prisijungti.html">Prisijungti</a>
+      <a href="registracija.html" class="btn btn-primary btn-block">Pradėti</a>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+
+  <section class="section page-first">
+    <div class="container">
+      <div class="lb" id="leaderboard">
+        <div class="lb-head">
+          <h1>Lyderiai</h1>
+          <p class="lede">Taškai skiriami už kiekvieną įvykusią pamoką: mokytojui 50, mokiniui 10.</p>
+          <p class="lb-me" id="lb-me" hidden></p>
+        </div>
+
+        <ol class="lb-podium" id="lb-podium" aria-label="Trys daugiausia taškų surinkę moksleiviai" hidden></ol>
+
+        <form class="lb-search" id="lb-search-form" role="search" novalidate>
+          <label class="sr-only" for="lb-search">Ieškoti lyderių lentelėje</label>
+          <input class="field-control" type="search" id="lb-search" maxlength="50" autocomplete="off" spellcheck="false" placeholder="Ieškoti pagal vardą ar vartotojo vardą">
+        </form>
+
+        <p class="form-error" id="lb-error" role="alert"></p>
+        <h2 class="lb-count" id="lb-count" aria-live="polite">Kraunama…</h2>
+        <ol class="lb-list" id="lb-list" aria-labelledby="lb-count"></ol>
+        <div class="lb-more">
+          <button type="button" class="btn btn-ghost" id="lb-more" hidden>Rodyti daugiau</button>
+        </div>
+      </div>
+
+      <dialog class="confirm-dialog profile-dialog" id="lb-dialog" aria-labelledby="lb-name">
+        <div class="profile-dialog-body">
+          <div class="account-head">
+            <div class="avatar-frame avatar-frame--lg">
+              <img id="lb-avatar" src="assets/img/default-avatar.svg" alt="" width="112" height="112">
+            </div>
+            <div class="account-title">
+              <div class="account-name-row">
+                <h2 id="lb-name"></h2>
+                <span class="points-slot" id="lb-points"></span>
+                <span class="teacher-mark" id="lb-teacher-mark" hidden>Registruotas mokytojas</span>
+                <span class="title-slot" id="lb-titles"></span>
+              </div>
+              <p class="text-muted" id="lb-username"></p>
+            </div>
+          </div>
+
+          <p class="account-bio" id="lb-bio" hidden></p>
+          <p class="form-error" id="lb-dialog-error" role="alert"></p>
+
+          <dl class="account-details" id="lb-details"></dl>
+
+          <form method="dialog" class="account-edit-actions">
+            <button type="submit" class="btn btn-ghost" autofocus>Uždaryti</button>
+          </form>
+        </div>
+      </dialog>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div>
+        <a href="index.html" class="brand">
+          <img src="assets/img/logo-mark.png" alt="" width="30" height="30">
+          Mokify
+        </a>
+        <p class="text-muted mt-4" style="max-width:32ch;">Platforma, kurioje moksleiviai mokosi vieni iš kitų.</p>
+      </div>
+
+      <div class="footer-cols">
+        <h4>Platforma</h4>
+        <ul>
+          <li><a href="apie.html">Apie</a></li>
+          <li><a href="lyderiai.html">Lyderiai</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-cols">
+        <h4>Paskyra</h4>
+        <ul>
+          <li><a href="prisijungti.html">Prisijungti</a></li>
+          <li><a href="registracija.html">Registruotis</a></li>
+          <li><a href="pagalba.html">Pagalba</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-cols">
+        <h4>Sekite mus</h4>
+        <div class="social-row">
+          <a href="https://www.tiktok.com/@mokify_lt" target="_blank" rel="noopener noreferrer" aria-label="Mokify TikTok (atsidaro naujame skirtuke)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M16.6 5.82s.51.5 0 0A4.278 4.278 0 0 1 15.54 3h-3.09v12.4a2.592 2.592 0 0 1-2.59 2.5c-1.42 0-2.6-1.16-2.6-2.6 0-1.72 1.66-3.01 3.37-2.48V9.66c-3.45-.46-6.47 2.22-6.47 5.64 0 3.33 2.76 5.7 5.69 5.7 3.14 0 5.69-2.55 5.69-5.7V9.01a7.35 7.35 0 0 0 4.3 1.38V7.3s-1.88.09-3.24-1.48Z"/></svg>
+          </a>
+          <a href="https://www.facebook.com/profile.php?id=61591806752446" target="_blank" rel="noopener noreferrer" aria-label="Mokify Facebook (atsidaro naujame skirtuke)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M13.5 21v-7.5H16l.5-3h-3V8.25c0-.87.24-1.46 1.5-1.46H16.5V4.14C16.24 4.1 15.35 4 14.31 4 12.14 4 10.65 5.32 10.65 7.7v2.8H8.15v3h2.5V21Z"/></svg>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <span>© 2026 Mokify. Visos teisės saugomos.</span>
+      <span>Sukurta Lietuvai 🇱🇹</span>
+    </div>
+  </div>
+</footer>
+
+<script src="assets/js/config.js"></script>
+<script src="assets/js/main.js"></script>
+</body>
+</html>

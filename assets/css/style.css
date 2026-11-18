@@ -2008,6 +2008,119 @@ textarea.field-control { min-height: 96px; resize: vertical; line-height: 1.5; }
 .rating-line-star { display: inline-flex; width: 18px; height: 18px; }
 .rating-line-star svg { width: 100%; height: 100%; }
 
+/* The leaderboard (lyderiai.html): a podium for the top three (2nd, 1st,
+   3rd from left), then everyone else as numbered rows. */
+.lb { max-width: 760px; margin-inline: auto; }
+.lb-head { margin-bottom: var(--space-6); }
+.lb-head .lede { margin-top: var(--space-3); }
+.lb-me { margin-top: var(--space-3); font-weight: 700; color: var(--pen-blue); }
+.lb-me[hidden] { display: none; }
+
+.lb-podium {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-7);
+  padding: 0;
+  list-style: none;
+}
+.lb-podium[hidden] { display: none; }
+.lb-step--1 { order: 2; }
+.lb-step--2 { order: 1; }
+.lb-step--3 { order: 3; }
+.lb-step-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  width: 100%;
+  padding: var(--space-6) var(--space-2) var(--space-4);
+  border: 1.5px solid var(--ink-900);
+  border-radius: var(--radius-md);
+  background: var(--paper-raised);
+  box-shadow: var(--stamp-sm);
+  color: var(--ink-900);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+  transition: transform var(--dur-fast) ease;
+}
+.lb-step-card:hover { transform: translateY(-3px); }
+.lb-step-card:focus-visible { outline: 3px solid var(--pen-blue); outline-offset: 3px; }
+/* The steps: first is tallest. */
+.lb-step--1 .lb-step-card { padding-bottom: var(--space-8); background: linear-gradient(180deg, #FFF6D6, var(--paper-raised)); }
+.lb-step--2 .lb-step-card { padding-bottom: var(--space-6); }
+.lb-step-place {
+  position: absolute;
+  top: -18px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1.5px solid var(--ink-900);
+  border-radius: 999px;
+  font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: 1.05rem;
+  box-shadow: var(--stamp-sm);
+}
+.lb-medal--1 .lb-step-place { background: linear-gradient(180deg, #FFE27A, #F5B400); }
+.lb-medal--2 .lb-step-place { background: linear-gradient(180deg, #F1F3F5, #C3C8CF); }
+.lb-medal--3 .lb-step-place { background: linear-gradient(180deg, #F3C9A0, #CD8A4F); }
+.lb-step-avatar { width: 72px; height: 72px; margin-bottom: var(--space-2); }
+.lb-step--1 .lb-step-avatar { width: 88px; height: 88px; }
+.lb-step-name { font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+.lb-step-user { font-size: 0.82rem; overflow-wrap: anywhere; }
+.lb-step-card .lb-points { margin-top: var(--space-2); font-size: 1.15rem; }
+
+.lb-search { margin-bottom: var(--space-4); }
+.lb-count { font-size: clamp(1.15rem, 0.5vw + 1rem, 1.35rem); margin-bottom: var(--space-4); }
+.lb-list { margin: 0; padding: 0; list-style: none; border-top: 1.5px solid var(--ink-900); }
+.lb-row { border-bottom: 1px solid rgba(32, 30, 27, 0.15); }
+.lb-open {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-900);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.lb-open:hover { background: rgba(32, 30, 27, 0.05); }
+.lb-open:focus-visible { outline: 3px solid var(--pen-blue); outline-offset: 2px; }
+.lb-place { flex-shrink: 0; min-width: 2.6em; font-family: var(--font-hero); font-weight: 700; font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+.lb-place--1 { color: #C98A00; }
+.lb-place--2 { color: #7D8590; }
+.lb-place--3 { color: #A8622B; }
+.lb-row-avatar { width: 44px; height: 44px; }
+.lb-who { display: grid; flex: 1; min-width: 0; }
+.lb-name { font-weight: 600; overflow-wrap: anywhere; }
+.lb-user { font-size: 0.85rem; overflow-wrap: anywhere; }
+.lb-points { display: inline-flex; align-items: center; gap: 0.3rem; flex-shrink: 0; font-family: var(--font-hero); font-weight: 700; font-variant-numeric: tabular-nums; }
+.lb-points-star { display: inline-flex; width: 1.15em; height: 1.15em; }
+.lb-points-star svg { width: 100%; height: 100%; }
+.lb-more { display: flex; justify-content: center; margin-top: var(--space-5); }
+.lb-more .btn[hidden] { display: none; }
+
+@media (max-width: 520px) {
+  .lb-podium { gap: var(--space-2); }
+  .lb-step-card { padding-inline: var(--space-1); }
+  .lb-step-avatar { width: 56px; height: 56px; }
+  .lb-step--1 .lb-step-avatar { width: 68px; height: 68px; }
+  .lb-step-name { font-size: 0.8rem; overflow-wrap: break-word; hyphens: auto; }
+  .lb-step-user { font-size: 0.72rem; }
+  .lb-row-avatar { width: 36px; height: 36px; }
+  .lb-open { gap: var(--space-2); }
+  .lb-place { min-width: 2.1em; font-size: 1rem; }
+}
+
 /* The public check of a certificate (patvirtinimas.html). */
 .verify { max-width: 560px; margin-inline: auto; display: grid; gap: var(--space-5); }
 .verify-status { font-weight: 600; padding: var(--space-3) var(--space-4); border-radius: var(--radius-sm); border: 1.5px solid var(--ink-300); }
