@@ -1,0 +1,5 @@
+# Redirects, read by Cloudflare Pages. "from to status", one per line.
+
+# The "Kaip veikia" page became "Apie" (2026-11-18).
+/kaip-veikia       /apie  301
+/kaip-veikia.html  /apie  301
