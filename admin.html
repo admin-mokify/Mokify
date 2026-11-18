@@ -60,21 +60,39 @@
       </div>
 
       <div class="admin" id="admin">
-        <h1 class="admin-title">Administravimas</h1>
-        <p class="form-error" id="admin-error" role="alert"></p>
-
-        <div class="admin-tools" hidden>
-          <a class="admin-tool" href="tikrinimas.html" id="admin-review" hidden>
-            <h2>Dokumentų tikrinimas</h2>
-            <p class="text-muted">Mokytojų diplomai, pažymėjimai ir TAMO pažymiai.</p>
-            <p class="admin-tool-status" id="admin-review-status"></p>
-          </a>
-
-          <a class="admin-tool" href="kodai.html" id="admin-codes" hidden>
-            <h2>Registracijos kodai</h2>
-            <p class="text-muted">Mokyklų pridėjimas ir registracijos kodų kūrimas.</p>
-          </a>
+        <div class="admin-head">
+          <h1 class="admin-title">Administravimas</h1>
+          <button type="button" class="edit-button admin-reorder" id="admin-reorder" aria-pressed="false" aria-label="Keisti įrankių tvarką" title="Keisti įrankių tvarką" hidden>
+            <svg class="admin-reorder-edit" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg>
+            <svg class="admin-reorder-done" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+          </button>
         </div>
+        <p class="form-error" id="admin-error" role="alert"></p>
+        <p class="sr-only" id="admin-order-status" role="status" aria-live="polite"></p>
+
+        <ol class="admin-tools" id="admin-tools" aria-label="Įrankiai" hidden>
+          <li class="admin-tool-item" data-tool="review" hidden>
+            <a class="admin-tool" href="tikrinimas.html">
+              <h2>Dokumentų tikrinimas</h2>
+              <p class="text-muted">Mokytojų diplomai, pažymėjimai ir TAMO pažymiai.</p>
+              <p class="admin-tool-status" id="admin-review-status"></p>
+            </a>
+          </li>
+
+          <li class="admin-tool-item" data-tool="codes" hidden>
+            <a class="admin-tool" href="kodai.html">
+              <h2>Registracijos kodai</h2>
+              <p class="text-muted">Mokyklų pridėjimas ir registracijos kodų kūrimas.</p>
+            </a>
+          </li>
+
+          <li class="admin-tool-item" data-tool="users" hidden>
+            <a class="admin-tool" href="vartotojai.html">
+              <h2>Vartotojai</h2>
+              <p class="text-muted">Vartotojų paieška, jų duomenų peržiūra, keitimas ir ištrynimas.</p>
+            </a>
+          </li>
+        </ol>
       </div>
 
     </div>

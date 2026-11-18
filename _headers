@@ -15,12 +15,13 @@
 #   sha256-6a/y...  tikrinimas.html: log in first (in its own policy below)
 #   sha256-v5ka...  kodai.html: log in first
 #   sha256-YGTZ...  admin.html: log in first
+#   sha256-zGcE...  vartotojai.html: log in first
 # connect-src must name the Supabase address from assets/js/config.js twice:
 # with https:// for the database, and with wss:// for the live channel that
 # tells an open meeting there is news (Supabase Realtime).
 
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-dNdlBplWR5bDZDI+YCKolkPPL27/gS/a7SNuPT2Lg0A=' 'sha256-gNErPQNFHnPV6E21y/i1vcerqZ7iQcV1hk/wL8290Iw=' 'sha256-aTe+duQfxwseG47G0/v3OGxdlnVvpR8CJ892EWSSVUE=' 'sha256-DxZ8bphmntGBWUwZoi4Mcw5nF0glV0/n88AvjVS1kXc=' 'sha256-coQpCj39+gsPChai8I7wuQVJtQ+rMlLIHy81Ncooiy4=' 'sha256-kJVYAtI8BxNsALvkC9bdj4OoEnwsUO8QrNIfhQeZ45I=' 'sha256-T8BLNf9ajZBFEcnas/0Q1vjc+GdSOS/A5KRMtr50ZYY=' 'sha256-v5kauUFJsqYzGc06dZiNRCwgHLpzD8ARZwtCJl/X31c=' 'sha256-YGTZK1M33rHx4rEFJIyJIW4LdQjPxIpYuGlg4S2Jgfw='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://wswryravelakztdkiysq.supabase.co wss://wswryravelakztdkiysq.supabase.co; object-src 'none'; frame-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-dNdlBplWR5bDZDI+YCKolkPPL27/gS/a7SNuPT2Lg0A=' 'sha256-gNErPQNFHnPV6E21y/i1vcerqZ7iQcV1hk/wL8290Iw=' 'sha256-aTe+duQfxwseG47G0/v3OGxdlnVvpR8CJ892EWSSVUE=' 'sha256-DxZ8bphmntGBWUwZoi4Mcw5nF0glV0/n88AvjVS1kXc=' 'sha256-coQpCj39+gsPChai8I7wuQVJtQ+rMlLIHy81Ncooiy4=' 'sha256-kJVYAtI8BxNsALvkC9bdj4OoEnwsUO8QrNIfhQeZ45I=' 'sha256-T8BLNf9ajZBFEcnas/0Q1vjc+GdSOS/A5KRMtr50ZYY=' 'sha256-v5kauUFJsqYzGc06dZiNRCwgHLpzD8ARZwtCJl/X31c=' 'sha256-YGTZK1M33rHx4rEFJIyJIW4LdQjPxIpYuGlg4S2Jgfw=' 'sha256-zGcEF7EoyNFw11TxfLxI1mGtIGXTWc9R1dDLy8nFI54='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://wswryravelakztdkiysq.supabase.co wss://wswryravelakztdkiysq.supabase.co; object-src 'none'; frame-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   Referrer-Policy: strict-origin-when-cross-origin

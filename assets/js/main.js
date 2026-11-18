@@ -20,6 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initReviewPage();
   initCodesPage();
   initAdminPage();
+  initUsersPage();
   initNotifications();
 });
 
@@ -2993,7 +2994,7 @@ async function fetchStaffRoles(session) {
   return { admin, reviewer };
 }
 
-const ADMIN_PAGES = ['admin', 'tikrinimas', 'kodai'];
+const ADMIN_PAGES = ['admin', 'tikrinimas', 'kodai', 'vartotojai'];
 
 // Adds "Administravimas" to the menus, after Pagalba (the account button
 // stays last).
@@ -3036,10 +3037,8 @@ function initAdminPage() {
       deny();
       return;
     }
-    document.getElementById('admin-codes').hidden = !roles.admin;
-    const review = document.getElementById('admin-review');
-    review.hidden = !roles.reviewer;
-    page.querySelector('.admin-tools').hidden = false;
+    const prefs = await reviewRpc(session, 'staff_prefs_get', {});
+    initAdminTools(session, roles, prefs.ok && Array.isArray(prefs.tool_order) ? prefs.tool_order : []);
 
     // How many documents are waiting to be checked.
     if (roles.reviewer) {
@@ -3052,6 +3051,478 @@ function initAdminPage() {
       }
     }
   });
+}
+
+// Which role each tool needs.
+const ADMIN_TOOL_ROLES = { review: 'reviewer', codes: 'admin', users: 'admin' };
+
+// The tools list on admin.html: shown in the student's saved order (tools
+// added later come after, in the page's order). The pencil switches on
+// rearranging: drag a tool (mouse or finger), or focus it and use the arrow
+// keys. Every move is saved straight away.
+function initAdminTools(session, roles, savedOrder) {
+  const list = document.getElementById('admin-tools');
+  const toggle = document.getElementById('admin-reorder');
+  const error = document.getElementById('admin-error');
+  const status = document.getElementById('admin-order-status');
+  const page = document.getElementById('admin');
+  const items = [...list.querySelectorAll('.admin-tool-item')];
+  const toolOf = (item) => item.dataset.tool;
+  const titleOf = (item) => item.querySelector('h2').textContent;
+
+  items.forEach((item) => { item.hidden = !roles[ADMIN_TOOL_ROLES[toolOf(item)]]; });
+  const rank = (item) => {
+    const i = savedOrder.indexOf(toolOf(item));
+    return i === -1 ? savedOrder.length + items.indexOf(item) : i;
+  };
+  list.append(...[...items].sort((a, b) => rank(a) - rank(b)));
+  list.hidden = false;
+
+  const visible = () => [...list.children].filter((item) => !item.hidden);
+  toggle.hidden = visible().length < 2;
+
+  let editing = false;
+  let saving = Promise.resolve();
+  const save = () => {
+    const order = [...list.children].map(toolOf);
+    saving = saving.then(async () => {
+      const fresh = (await getSession()) || session;
+      const res = await reviewRpc(fresh, 'staff_prefs_save', { p_tool_order: order, p_confirm_delete: null });
+      showBanner(error, res.ok ? '' : 'Nepavyko išsaugoti įrankių tvarkos. Pabandyk dar kartą.');
+    });
+  };
+  const announce = (item) => {
+    status.textContent = `${titleOf(item)}: ${visible().indexOf(item) + 1} vieta iš ${visible().length}.`;
+  };
+
+  function setEditing(on) {
+    editing = on;
+    page.classList.toggle('is-reordering', on);
+    toggle.setAttribute('aria-pressed', String(on));
+    const label = on ? 'Baigti keisti tvarką' : 'Keisti įrankių tvarką';
+    toggle.setAttribute('aria-label', label);
+    toggle.title = label;
+    list.querySelectorAll('.admin-tool-item').forEach((item) => {
+      const link = item.querySelector('a');
+      if (on) {
+        item.tabIndex = 0;
+        item.setAttribute('aria-label', `${titleOf(item)}. Perkelk rodyklėmis aukštyn ir žemyn.`);
+        link.tabIndex = -1;
+      } else {
+        item.removeAttribute('tabindex');
+        item.removeAttribute('aria-label');
+        link.removeAttribute('tabindex');
+      }
+    });
+    if (on) visible()[0].focus();
+  }
+  toggle.addEventListener('click', () => setEditing(!editing));
+
+  // While rearranging, the tools are not links.
+  list.addEventListener('click', (e) => {
+    if (editing && e.target.closest('a')) e.preventDefault();
+  });
+
+  list.addEventListener('keydown', (e) => {
+    if (!editing || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+    const item = e.target.closest('.admin-tool-item');
+    if (!item) return;
+    const shown = visible();
+    const to = shown[shown.indexOf(item) + (e.key === 'ArrowUp' ? -1 : 1)];
+    if (!to) return;
+    e.preventDefault();
+    if (e.key === 'ArrowUp') to.before(item);
+    else to.after(item);
+    item.focus();
+    announce(item);
+    save();
+  });
+
+  // Dragging: the tool follows the pointer and changes places with a
+  // neighbour once it passes the neighbour's middle.
+  let drag = null;
+  list.addEventListener('pointerdown', (e) => {
+    if (!editing || drag || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    const item = e.target.closest('.admin-tool-item');
+    if (!item) return;
+    e.preventDefault();
+    item.setPointerCapture(e.pointerId);
+    drag = { item, id: e.pointerId, startY: e.clientY, moved: false };
+    item.classList.add('is-dragging');
+  });
+  list.addEventListener('pointermove', (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const { item } = drag;
+    // Where the tool's top would be at this pointer position (layout
+    // position + how far it has been dragged), compared with neighbours'
+    // middles; a fast drag may pass several at once.
+    for (;;) {
+      const shown = visible();
+      const i = shown.indexOf(item);
+      const top = item.offsetTop + (e.clientY - drag.startY);
+      const bottom = top + item.offsetHeight;
+      const next = shown[i + 1];
+      const prev = shown[i - 1];
+      let neighbour = null;
+      if (next && bottom > next.offsetTop + next.offsetHeight / 2) neighbour = next;
+      else if (prev && top < prev.offsetTop + prev.offsetHeight / 2) neighbour = prev;
+      if (!neighbour) break;
+      const before = item.offsetTop;
+      if (neighbour === next) next.after(item);
+      else prev.before(item);
+      drag.startY += item.offsetTop - before;
+      drag.moved = true;
+    }
+    item.style.translate = `0 ${e.clientY - drag.startY}px`;
+  });
+  const endDrag = (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const { item, moved } = drag;
+    drag = null;
+    item.classList.remove('is-dragging');
+    item.style.translate = '';
+    if (moved) {
+      announce(item);
+      save();
+    }
+  };
+  list.addEventListener('pointerup', endDrag);
+  list.addEventListener('pointercancel', endDrag);
+}
+
+// ---------------------------------------------------------------------------
+// User management (vartotojai.html), for admins: search, look at, change and
+// delete users. The rules live in supabase/updates/2026-11-20-admin-users.sql
+// (any name of 1-80 characters; a username keeps its login format; admins
+// and oneself can't be deleted).
+// ---------------------------------------------------------------------------
+
+const USERS_ERRORS = {
+  network: NETWORK_FAILED_MSG,
+  bad_name: 'Vardas turi būti nuo 1 iki 80 simbolių.',
+  bad_username: 'Vartotojo vardas: 3–20 simbolių, raidės be diakritikų, skaičiai, „_“ arba „.“ (su juo jungiamasi).',
+  username_taken: 'Šis vartotojo vardas jau užimtas.',
+  bad_grade: 'Pasirink klasę nuo 5 iki 12.',
+  self: 'Savo paskyros čia ištrinti negali.',
+  admin: 'Administratoriaus paskyros ištrinti negalima.',
+  not_found: 'Šio vartotojo nebėra.',
+  missing: 'Vartotojų valdymas dar neįjungtas.',
+  failed: 'Nepavyko. Pabandyk dar kartą.',
+};
+
+function initUsersPage() {
+  const page = document.getElementById('users');
+  if (!page) return;
+  if (!readSession()) {
+    window.location.replace('prisijungti.html?next=vartotojai.html');
+    return;
+  }
+
+  const search = document.getElementById('users-search');
+  const confirmBox = document.getElementById('users-confirm');
+  const error = document.getElementById('users-error');
+  const count = document.getElementById('users-count');
+  const list = document.getElementById('users-list');
+  const dialog = document.getElementById('user-dialog');
+  const form = document.getElementById('user-form');
+  const nameInput = document.getElementById('user-full-name');
+  const usernameInput = document.getElementById('user-username-input');
+  const gradeInput = document.getElementById('user-grade');
+  const formError = document.getElementById('user-error');
+  const saveBtn = document.getElementById('user-save');
+  const confirmDialog = document.getElementById('user-confirm');
+  const confirmOk = document.getElementById('user-confirm-ok');
+  let users = [];
+  let total = 0;
+  let open = null; // The user shown in the dialog.
+  let pendingDelete = null;
+  let searchToken = 0;
+
+  const deny = (text) => {
+    page.hidden = true;
+    if (text) document.getElementById('users-denied-text').textContent = text;
+    document.getElementById('users-denied').hidden = false;
+  };
+  const rpc = async (fn, params) => {
+    const session = await getSession();
+    if (!session) return { ok: false, error: 'network' };
+    return reviewRpc(session, fn, params);
+  };
+  const fail = (res, banner = error) => {
+    if (res.error === 'forbidden') deny();
+    else if (res.error === 'missing') deny(USERS_ERRORS.missing);
+    else showBanner(banner, USERS_ERRORS[res.error] || USERS_ERRORS.failed);
+  };
+
+  function userMeta(u) {
+    return [`@${u.username}`, u.school, `${u.grade} klasė`].filter(Boolean).join(' · ');
+  }
+
+  function renderList() {
+    list.replaceChildren(...users.map((u) => {
+      const li = document.createElement('li');
+      li.className = 'users-row';
+      const openBtn = document.createElement('button');
+      openBtn.type = 'button';
+      openBtn.className = 'users-open';
+      const name = document.createElement('span');
+      name.className = 'users-name';
+      name.textContent = u.full_name;
+      const roles = [u.me && 'Tu', u.admin && 'Administratorius', u.teacher && 'Mokytojas'].filter(Boolean);
+      if (roles.length) {
+        const tag = document.createElement('span');
+        tag.className = 'users-roles';
+        tag.textContent = roles.join(', ');
+        name.append(' ', tag);
+      }
+      const meta = document.createElement('span');
+      meta.className = 'users-meta text-muted';
+      meta.textContent = `${userMeta(u)} · ${u.email}`;
+      openBtn.append(name, meta);
+      openBtn.addEventListener('click', () => showUser(u));
+      li.appendChild(openBtn);
+      // Admins (oneself included) can't be deleted, so they get no button.
+      if (!u.me && !u.admin) {
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'btn btn-ghost btn-sm btn-danger-ghost users-delete';
+        del.textContent = 'Ištrinti';
+        del.setAttribute('aria-label', `Ištrinti ${u.full_name} (@${u.username})`);
+        del.addEventListener('click', () => askDelete(u, del));
+        li.appendChild(del);
+      }
+      return li;
+    }));
+    const word = pluralLt(total, 'vartotojas', 'vartotojai', 'vartotojų');
+    count.textContent = total > users.length
+      ? `Rasta ${total} ${word}, rodoma ${users.length} naujausių`
+      : `Rasta ${total} ${word}`;
+  }
+
+  async function load() {
+    const token = ++searchToken;
+    const res = await rpc('admin_users', { p_query: search.value.trim() });
+    if (token !== searchToken) return;
+    if (!res.ok) {
+      count.textContent = '';
+      fail(res);
+      return;
+    }
+    showBanner(error, '');
+    users = Array.isArray(res.users) ? res.users : [];
+    total = Number(res.total) || users.length;
+    renderList();
+  }
+
+  let searchTimer = 0;
+  search.addEventListener('input', () => {
+    window.clearTimeout(searchTimer);
+    searchTimer = window.setTimeout(load, 250);
+  });
+  document.getElementById('users-search-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    window.clearTimeout(searchTimer);
+    load();
+  });
+
+  // --- Deleting ---------------------------------------------------------------
+
+  async function removeFiles(files) {
+    const paths = (Array.isArray(files) ? files : []).filter((p) => typeof p === 'string');
+    if (!paths.length) return;
+    const { supabaseUrl, supabaseKey } = backendConfig();
+    const session = await getSession();
+    if (!session || !supabaseUrl) return;
+    try {
+      await fetch(`${supabaseUrl.replace(/\/$/, '')}/storage/v1/object/${TEACHER_BUCKET}`, {
+        method: 'DELETE',
+        headers: { apikey: supabaseKey, Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prefixes: paths }),
+      });
+    } catch {
+      // The account is gone either way; a leftover file can be removed in Supabase.
+    }
+  }
+
+  async function deleteUser(u, btn) {
+    showBanner(error, '');
+    if (btn) setBusy(btn, true, 'Trinama…');
+    const res = await rpc('admin_delete_user', { p_user: u.id });
+    if (!res.ok) {
+      if (btn) setBusy(btn, false);
+      fail(res);
+      if (res.error === 'not_found') load();
+      return false;
+    }
+    await removeFiles(res.files);
+    users = users.filter((x) => x.id !== u.id);
+    total = Math.max(0, total - 1);
+    renderList();
+    return true;
+  }
+
+  function askDelete(u, btn) {
+    if (!confirmBox.checked) {
+      deleteUser(u, btn);
+      return;
+    }
+    pendingDelete = { u, btn };
+    document.getElementById('user-confirm-text').textContent =
+      `${u.full_name} (@${u.username}) paskyra ir viskas, kas su ja susiję – žinutės, pamokos, mokytojo profilis ir dokumentai – bus ištrinta visam laikui.`;
+    confirmDialog.showModal();
+  }
+  confirmOk.addEventListener('click', async () => {
+    if (!pendingDelete) return;
+    const { u, btn } = pendingDelete;
+    pendingDelete = null;
+    confirmDialog.close();
+    await deleteUser(u, btn);
+  });
+  confirmDialog.addEventListener('close', () => { pendingDelete = null; });
+
+  confirmBox.addEventListener('change', async () => {
+    const res = await rpc('staff_prefs_save', { p_tool_order: null, p_confirm_delete: confirmBox.checked });
+    if (!res.ok) showBanner(error, 'Nepavyko išsaugoti nustatymo. Pabandyk dar kartą.');
+  });
+
+  // --- Looking at and changing one user ----------------------------------------
+
+  const setFieldError = (input, message) => {
+    const field = input.closest('.field');
+    field.classList.toggle('has-error', Boolean(message));
+    field.querySelector('.field-error').textContent = message || '';
+    input.setAttribute('aria-invalid', message ? 'true' : 'false');
+  };
+  const clearFormErrors = () => {
+    [nameInput, usernameInput, gradeInput].forEach((input) => setFieldError(input, ''));
+    showBanner(formError, '');
+  };
+
+  const detail = (label, value) => {
+    const row = document.createElement('div');
+    const dt = document.createElement('dt');
+    dt.textContent = label;
+    const dd = document.createElement('dd');
+    dd.textContent = value;
+    row.append(dt, dd);
+    return row;
+  };
+
+  function fillHeader(u) {
+    document.getElementById('user-name').textContent = u.full_name;
+    document.getElementById('user-username').textContent = `@${u.username}`;
+  }
+
+  async function showUser(row) {
+    open = row;
+    clearFormErrors();
+    fillHeader(row);
+    document.getElementById('user-avatar').src = DEFAULT_AVATAR;
+    document.getElementById('user-teacher-mark').hidden = !row.teacher;
+    document.getElementById('user-bio').hidden = true;
+    const details = document.getElementById('user-details');
+    details.replaceChildren(detail('El. pašto adresas', row.email), detail('Mokykla', row.school || '—'));
+    nameInput.value = row.full_name;
+    usernameInput.value = row.username;
+    gradeInput.value = String(row.grade);
+    form.hidden = false;
+    if (!dialog.open) dialog.showModal();
+
+    const res = await rpc('admin_user', { p_user: row.id });
+    if (open !== row) return;
+    if (!res.ok || !res.user) {
+      fail(res, formError);
+      return;
+    }
+    const u = res.user;
+    const avatar = typeof u.avatar === 'string' && (u.avatar === DEFAULT_AVATAR || u.avatar.startsWith('data:image/jpeg;base64,'))
+      ? u.avatar : DEFAULT_AVATAR;
+    document.getElementById('user-avatar').src = avatar;
+    document.getElementById('user-teacher-mark').hidden = !u.teacher;
+    const bio = document.getElementById('user-bio');
+    bio.textContent = u.bio || '';
+    bio.hidden = !u.bio;
+
+    const rows = [
+      detail('El. pašto adresas', u.email),
+      detail('Mokykla', u.school ? `${u.school.name} (prenumerata iki ${u.school.subscription_ends})` : '—'),
+      detail('Klasė', `${u.grade} klasė`),
+      detail('Prisiregistravo', formatReviewTime(u.created_at)),
+      detail('Paskutinį kartą prisijungė', u.last_sign_in_at ? formatReviewTime(u.last_sign_in_at) : '—'),
+    ];
+    if (u.teacher) {
+      rows.push(detail('Moko', `${formatSubjects(u.teacher.subjects || [])} (${formatLevels(u.teacher.levels || [])})`));
+      const d = u.documents || {};
+      rows.push(detail('Dokumentai', `patvirtinti ${d.verified || 0}, laukia ${d.pending || 0}, nepatvirtinti ${d.rejected || 0}`));
+    }
+    rows.push(detail('Išsiuntė žinučių', String(u.messages_sent || 0)));
+    rows.push(detail('Pamokų', String(u.lessons || 0)));
+    const roles = [u.admin && 'administratorius', u.reviewer && 'dokumentų tikrintojas'].filter(Boolean);
+    if (roles.length) rows.push(detail('Vaidmenys', roles.join(', ')));
+    details.replaceChildren(...rows);
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!open) return;
+    clearFormErrors();
+    const fullName = nameInput.value.trim();
+    const username = usernameInput.value.trim();
+    let ok = true;
+    if (fullName.length < 1 || fullName.length > 80) {
+      setFieldError(nameInput, USERS_ERRORS.bad_name);
+      ok = false;
+    }
+    if (!/^[A-Za-z0-9_.]{3,20}$/.test(username)) {
+      setFieldError(usernameInput, USERS_ERRORS.bad_username);
+      ok = false;
+    }
+    if (!ok) return;
+
+    setBusy(saveBtn, true, 'Saugoma…');
+    const row = open;
+    const res = await rpc('admin_update_user', {
+      p_user: row.id, p_full_name: fullName, p_username: username, p_grade: Number(gradeInput.value),
+    });
+    setBusy(saveBtn, false);
+    if (!res.ok || !res.user) {
+      const field = { bad_name: nameInput, bad_username: usernameInput, username_taken: usernameInput, bad_grade: gradeInput }[res.error];
+      if (field) setFieldError(field, USERS_ERRORS[res.error]);
+      else fail(res, formError);
+      return;
+    }
+    Object.assign(row, { full_name: res.user.full_name, username: res.user.username, grade: res.user.grade });
+    if (open === row) {
+      fillHeader(row);
+      nameInput.value = row.full_name;
+      usernameInput.value = row.username;
+    }
+    renderList();
+    saveBtn.textContent = 'Išsaugota';
+    window.clearTimeout(saveBtn.resetTimer);
+    saveBtn.resetTimer = window.setTimeout(() => { saveBtn.textContent = 'Išsaugoti'; }, 2000);
+  });
+
+  document.getElementById('user-close').addEventListener('click', () => dialog.close());
+  dialog.addEventListener('close', () => { open = null; });
+
+  // Who may use the page, and their "ask before deleting" setting.
+  (async () => {
+    const session = await getSession();
+    if (!session) {
+      if (!readSession()) window.location.replace('prisijungti.html?next=vartotojai.html');
+      else showBanner(error, NETWORK_FAILED_MSG);
+      return;
+    }
+    const roles = await fetchStaffRoles(session);
+    if (!roles.admin) {
+      deny();
+      return;
+    }
+    const prefs = await reviewRpc(session, 'staff_prefs_get', {});
+    if (prefs.ok) confirmBox.checked = prefs.confirm_delete !== false;
+    load();
+  })();
 }
 
 // ---------------------------------------------------------------------------

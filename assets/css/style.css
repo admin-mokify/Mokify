@@ -175,8 +175,11 @@ html::-webkit-scrollbar { width: 0; height: 0; display: none; }
 
 .section-head { max-width: 640px; margin-bottom: var(--space-7); }
 .section-head.center { margin-inline: auto; text-align: center; }
+/* The first section of a page without a hero: clears the floating header. */
+.page-first { padding-top: clamp(130px, 18vh, 170px); }
 /* A few paragraphs under a heading (Apie). */
 .about-text { margin-bottom: 0; }
+.about-text h1 { font-size: clamp(2.2rem, 2vw + 1.6rem, 3.2rem); line-height: 1.08; }
 .about-text .lede { margin-top: var(--space-4); }
 
 /* Torn-page divider between sections */
@@ -563,19 +566,8 @@ h3, .h3 {
   border-top: 1.5px solid var(--ink-900);
 }
 .worksheet-row {
-  display: grid;
-  grid-template-columns: 40px 1fr;
-  gap: var(--space-4);
-  align-items: start;
   padding-block: var(--space-6);
   border-bottom: 1.5px dashed var(--ink-300);
-}
-@media (min-width: 640px) { .worksheet-row { grid-template-columns: 56px 1fr; } }
-
-.worksheet-check {
-  color: var(--pen-green);
-  width: 32px;
-  height: 32px;
 }
 .worksheet-row h3 { margin-bottom: var(--space-1); }
 
@@ -1835,12 +1827,37 @@ textarea.field-control { min-height: 96px; resize: vertical; line-height: 1.5; }
 .review-denied[hidden] { display: none; }
 .review-denied { display: grid; justify-items: start; gap: var(--space-4); max-width: 560px; margin-inline: auto; }
 
-/* Administration (admin.html): one card per tool. */
-.admin { max-width: 960px; margin-inline: auto; }
+/* Administration (admin.html): one tool per row, in the student's own order.
+   The pencil switches on rearranging (drag, or arrow keys). */
+.admin { max-width: 760px; margin-inline: auto; }
 .admin[hidden] { display: none; }
-.admin-title { font-size: clamp(2rem, 1.5vw + 1.6rem, 2.8rem); margin-bottom: var(--space-6); }
-.admin-tools { display: grid; gap: var(--space-5); grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
-.admin-tools[hidden], .admin-tool[hidden] { display: none; }
+.admin-head { position: relative; padding-right: 56px; margin-bottom: var(--space-6); }
+.admin-title { font-size: clamp(2rem, 1.5vw + 1.6rem, 2.8rem); }
+.admin-reorder { top: 50%; translate: 0 -50%; }
+.admin-reorder .admin-reorder-done,
+.admin-reorder[aria-pressed="true"] .admin-reorder-edit { display: none; }
+.admin-reorder[aria-pressed="true"] .admin-reorder-done { display: block; }
+.admin-reorder[aria-pressed="true"] { background: var(--pen-blue); border-color: var(--pen-blue); color: var(--white); }
+.admin-tools { display: flex; flex-direction: column; gap: var(--space-4); margin: 0; padding: 0; list-style: none; }
+.admin-tools[hidden], .admin-tool-item[hidden] { display: none; }
+.admin-tool-item { position: relative; border-radius: var(--radius-md); }
+.is-reordering .admin-tool-item { cursor: grab; touch-action: none; user-select: none; }
+.is-reordering .admin-tool-item:focus-visible { outline: 3px solid var(--pen-blue); outline-offset: 3px; }
+.is-reordering .admin-tool { padding-right: 64px; }
+/* The grip: rows of dots on the right while rearranging. */
+.is-reordering .admin-tool-item::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: var(--space-5);
+  width: 14px;
+  height: 22px;
+  translate: 0 -50%;
+  background: radial-gradient(circle, var(--ink-500) 1.6px, transparent 2px) 0 0 / 7px 7px;
+  pointer-events: none;
+}
+.admin-tool-item.is-dragging { z-index: 2; cursor: grabbing; }
+.admin-tool-item.is-dragging .admin-tool { box-shadow: var(--stamp-md); transform: none; }
 .admin-tool {
   display: grid;
   align-content: start;
@@ -1853,11 +1870,49 @@ textarea.field-control { min-height: 96px; resize: vertical; line-height: 1.5; }
   color: var(--ink-900);
   transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out);
 }
-.admin-tool:hover { transform: translate(-3px, -3px); box-shadow: var(--stamp-md); }
+:not(.is-reordering) > .admin-tools .admin-tool:hover { transform: translate(-3px, -3px); box-shadow: var(--stamp-md); }
 .admin-tool:focus-visible { outline: 3px solid var(--pen-blue); outline-offset: 3px; }
 .admin-tool h2 { font-size: 1.3rem; }
 .admin-tool-status { font-weight: 600; color: var(--pen-blue); }
 .admin-tool-status:empty { display: none; }
+
+/* User management (vartotojai.html) */
+.users { max-width: 900px; }
+.users-search { margin-bottom: var(--space-4); }
+.users-confirm { margin-bottom: var(--space-5); }
+.users-count { font-size: clamp(1.15rem, 0.5vw + 1rem, 1.35rem); margin-bottom: var(--space-4); }
+.users-list { margin: 0; padding: 0; list-style: none; border-top: 1.5px solid var(--ink-900); }
+.users-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-block: var(--space-3);
+  border-bottom: 1.5px solid rgba(32, 30, 27, 0.15);
+}
+.users-open {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  padding: var(--space-2);
+  margin: calc(var(--space-2) * -1) 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-900);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.users-open:hover { background: rgba(32, 30, 27, 0.05); }
+.users-open:focus-visible { outline: 3px solid var(--pen-blue); outline-offset: 2px; }
+.users-name { font-weight: 600; overflow-wrap: anywhere; }
+.users-roles { font-weight: 500; font-size: 0.85rem; color: var(--pen-blue); }
+.users-meta { font-size: 0.88rem; overflow-wrap: anywhere; }
+.users-delete { flex-shrink: 0; }
+.user-edit { padding-top: var(--space-5); border-top: 1.5px solid rgba(32, 30, 27, 0.15); }
+.user-edit[hidden] { display: none; }
+.user-edit-title { font-size: 1.1rem; }
 
 /* Registration codes (kodai.html) */
 .codes { max-width: 560px; margin-inline: auto; }
