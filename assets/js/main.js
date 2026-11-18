@@ -4954,8 +4954,8 @@ const textEl = (tag, className, text) => {
   return el;
 };
 
-// The points badge beside a name: a big gold star with the total inside it
-// (the number gets smaller as it gets longer, so it stays inside the star).
+// The points badge beside a name: a gold medal (a plain round coin) with the
+// total inside it (the number gets smaller as it gets longer, so it fits).
 function buildPointsBadge(total) {
   const value = Number(total) || 0;
   const badge = document.createElement('span');
@@ -4965,7 +4965,7 @@ function buildPointsBadge(total) {
   badge.setAttribute('aria-label', `${value} ${pluralLt(value, 'taškas', 'taškai', 'taškų')}`);
   badge.title = badge.getAttribute('aria-label');
   const number = textEl('span', 'points-badge-value', '0');
-  badge.append(buildStar({ shine: false }), number);
+  badge.appendChild(number);
   countUp(number, value);
   return badge;
 }
