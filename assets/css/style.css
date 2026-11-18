@@ -366,18 +366,26 @@ h3, .h3 {
   .nav-toggle { display: none; }
 }
 /* Logged in, the menu has three more links (Mokytojai, Susitikimai, Žinutės):
-   packed tighter on narrower screens, and a wider island on wide ones. */
+   packed tighter on narrower screens, and a wider island on wide ones. Staff
+   also get "Administravimas" (.has-admin-nav): wider still, and on narrower
+   screens the account button shows only the picture. */
 @media (min-width: 900px) and (max-width: 1099px) {
   .signed-in .nav-links { gap: 0; }
   .signed-in .nav-links a { padding-inline: var(--space-3); }
+  .signed-in .nav-account { padding: 3px; }
+  .signed-in .nav-account span { display: none; }
+}
+@media (min-width: 900px) and (max-width: 1199px) {
+  .has-admin-nav .nav-links a { padding-inline: var(--space-2); font-size: 0.88rem; }
+  .has-admin-nav .nav-shell { gap: var(--space-2); padding-inline: var(--space-4); }
 }
 @media (min-width: 1100px) {
-  .signed-in .site-header { max-width: 940px; }
+  .signed-in .site-header { max-width: 960px; }
+  .has-admin-nav .site-header { max-width: 1120px; }
 }
-/* Logged out, the menu has only Apie and Pagalba: a smaller island,
-   with the links next to the buttons instead of alone in the middle. Widen
-   it again when the Mokykloms / Moksleiviams pages are added. */
-:root:not(.signed-in) .site-header { max-width: 600px; }
+/* Logged out, the menu has only Apie, Lyderiai and Pagalba: a smaller
+   island, with the links next to the buttons instead of alone in the middle. */
+:root:not(.signed-in) .site-header { max-width: 680px; }
 :root:not(.signed-in) .nav-links { margin-left: auto; }
 
 /* Dark-glass variant floating over a full-bleed hero photo, until scrolled */
@@ -2016,12 +2024,15 @@ textarea.field-control { min-height: 96px; resize: vertical; line-height: 1.5; }
 .lb-me { margin-top: var(--space-3); font-weight: 700; color: var(--pen-blue); }
 .lb-me[hidden] { display: none; }
 
+/* The podium: three blocks side by side on one floor line, 1st in the
+   middle and tallest, 2nd on the left, 3rd on the right. Each student
+   stands on top of their block; the blocks rise up when the page opens. */
 .lb-podium {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: end;
-  gap: var(--space-3);
-  margin: 0 0 var(--space-7);
+  max-width: 640px;
+  margin: 0 auto var(--space-8);
   padding: 0;
   list-style: none;
 }
@@ -2030,50 +2041,64 @@ textarea.field-control { min-height: 96px; resize: vertical; line-height: 1.5; }
 .lb-step--2 { order: 1; }
 .lb-step--3 { order: 3; }
 .lb-step-card {
-  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-1);
+  gap: 2px;
   width: 100%;
-  padding: var(--space-6) var(--space-2) var(--space-4);
-  border: 1.5px solid var(--ink-900);
-  border-radius: var(--radius-md);
-  background: var(--paper-raised);
-  box-shadow: var(--stamp-sm);
+  padding: 0;
+  border: 0;
+  background: none;
   color: var(--ink-900);
   font: inherit;
   text-align: center;
   cursor: pointer;
-  transition: transform var(--dur-fast) ease;
 }
-.lb-step-card:hover { transform: translateY(-3px); }
-.lb-step-card:focus-visible { outline: 3px solid var(--pen-blue); outline-offset: 3px; }
-/* The steps: first is tallest. */
-.lb-step--1 .lb-step-card { padding-bottom: var(--space-8); background: linear-gradient(180deg, #FFF6D6, var(--paper-raised)); }
-.lb-step--2 .lb-step-card { padding-bottom: var(--space-6); }
-.lb-step-place {
-  position: absolute;
-  top: -18px;
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
+.lb-step-card:focus-visible { outline: 3px solid var(--pen-blue); outline-offset: 4px; border-radius: var(--radius-sm); }
+.lb-step-avatar { width: 76px; height: 76px; margin-bottom: var(--space-2); transition: transform var(--dur-fast) ease; }
+.lb-step--1 .lb-step-avatar { width: 96px; height: 96px; }
+.lb-step-card:hover .lb-step-avatar { transform: translateY(-4px); }
+.lb-step-name { padding-inline: var(--space-2); font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+.lb-step-user { padding-inline: var(--space-2); font-size: 0.82rem; overflow-wrap: anywhere; }
+.lb-step-card .lb-points { margin: var(--space-1) 0 var(--space-3); font-size: 1.15rem; }
+
+.lb-block {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  align-self: stretch;
+  padding-top: var(--space-3);
   border: 1.5px solid var(--ink-900);
-  border-radius: 999px;
-  font-family: var(--font-hero);
-  font-weight: 700;
-  font-size: 1.05rem;
-  box-shadow: var(--stamp-sm);
+  border-bottom-width: 3px;
+  box-shadow: 4px 4px 0 var(--ink-900);
+  transform-origin: bottom;
+  animation: lb-rise 0.7s var(--ease-out) both;
 }
-.lb-medal--1 .lb-step-place { background: linear-gradient(180deg, #FFE27A, #F5B400); }
-.lb-medal--2 .lb-step-place { background: linear-gradient(180deg, #F1F3F5, #C3C8CF); }
-.lb-medal--3 .lb-step-place { background: linear-gradient(180deg, #F3C9A0, #CD8A4F); }
-.lb-step-avatar { width: 72px; height: 72px; margin-bottom: var(--space-2); }
-.lb-step--1 .lb-step-avatar { width: 88px; height: 88px; }
-.lb-step-name { font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
-.lb-step-user { font-size: 0.82rem; overflow-wrap: anywhere; }
-.lb-step-card .lb-points { margin-top: var(--space-2); font-size: 1.15rem; }
+.lb-block-place {
+  font-family: var(--font-hero);
+  font-weight: 800;
+  font-size: clamp(2.4rem, 4vw + 1rem, 3.6rem);
+  line-height: 1;
+  color: var(--ink-900);
+  text-shadow: 0 2px 0 rgba(255, 255, 255, 0.55);
+}
+/* Heights and stacking: the middle block sits above its neighbours, so the
+   left block's shadow tucks under it and its own shadow falls on the right. */
+.lb-step--1 .lb-block { height: 170px; z-index: 2; border-radius: var(--radius-sm) var(--radius-sm) 0 0; animation-delay: 0.3s; }
+.lb-step--2 .lb-block { height: 120px; z-index: 1; border-right: 0; border-radius: var(--radius-sm) 0 0 0; animation-delay: 0.15s; }
+.lb-step--3 .lb-block { height: 88px; z-index: 0; border-left: 0; border-radius: 0 var(--radius-sm) 0 0; }
+/* Gold, silver, bronze (equal points share a colour). */
+.lb-medal--1 .lb-block { background: linear-gradient(180deg, #FFE07A 0%, #F5B400 100%); }
+.lb-medal--2 .lb-block { background: linear-gradient(180deg, #F3F5F7 0%, #BFC5CD 100%); }
+.lb-medal--3 .lb-block { background: linear-gradient(180deg, #F2C89E 0%, #C98146 100%); }
+@keyframes lb-rise {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lb-block { animation: none; }
+}
 
 .lb-search { margin-bottom: var(--space-4); }
 .lb-count { font-size: clamp(1.15rem, 0.5vw + 1rem, 1.35rem); margin-bottom: var(--space-4); }
@@ -2110,10 +2135,12 @@ textarea.field-control { min-height: 96px; resize: vertical; line-height: 1.5; }
 .lb-more .btn[hidden] { display: none; }
 
 @media (max-width: 520px) {
-  .lb-podium { gap: var(--space-2); }
-  .lb-step-card { padding-inline: var(--space-1); }
   .lb-step-avatar { width: 56px; height: 56px; }
   .lb-step--1 .lb-step-avatar { width: 68px; height: 68px; }
+  .lb-step--1 .lb-block { height: 130px; }
+  .lb-step--2 .lb-block { height: 96px; }
+  .lb-step--3 .lb-block { height: 70px; }
+  .lb-step-card .lb-points { font-size: 1rem; }
   .lb-step-name { font-size: 0.8rem; overflow-wrap: break-word; hyphens: auto; }
   .lb-step-user { font-size: 0.72rem; }
   .lb-row-avatar { width: 36px; height: 36px; }

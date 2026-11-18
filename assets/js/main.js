@@ -563,7 +563,7 @@ function initAccountHeader() {
       if (!readSession()) {
         link.remove();
         finderLinks.forEach((a) => a.remove());
-        root.classList.remove('signed-in');
+        root.classList.remove('signed-in', 'has-admin-nav');
         memberLinks.forEach((a) => a.setAttribute('href', a.dataset.guestHref));
       }
       return;
@@ -571,7 +571,10 @@ function initAccountHeader() {
     // The messages page keeps the count up to date itself.
     if (!document.getElementById('chat')) fetchUnreadCount(session).then(setNavUnread);
     fetchStaffRoles(session).then((roles) => {
-      if (roles.admin || roles.reviewer) finderLinks.push(...addAdminNavLink(currentPage));
+      if (roles.admin || roles.reviewer) {
+        finderLinks.push(...addAdminNavLink(currentPage));
+        root.classList.add('has-admin-nav'); // one more link: a wider menu (style.css)
+      }
     });
     const profile = await fetchOwnProfile(session);
     if (profile && profile.avatar) img.src = profile.avatar;
@@ -5390,13 +5393,17 @@ function initLeaderboardPage() {
     b.className = 'lb-step-card';
     const frame = document.createElement('span');
     frame.className = 'avatar-frame lb-step-avatar';
-    frame.appendChild(avatarImg(item.avatar, 88));
+    frame.appendChild(avatarImg(item.avatar, 96));
+    // The student stands on top; the block below carries the place number.
+    const block = document.createElement('span');
+    block.className = 'lb-block';
+    block.appendChild(textEl('span', 'lb-block-place', `${item.place}`));
     b.append(
-      textEl('span', 'lb-step-place', `${item.place}`),
       frame,
       textEl('span', 'lb-step-name', item.name),
       textEl('span', 'lb-step-user text-muted', `@${item.username}`),
       pointsTag(item.points),
+      block,
     );
     b.setAttribute('aria-label', `${item.place} vieta: ${item.name}, ${item.points} ${pointsWord(item.points)}`);
     b.addEventListener('click', () => openProfile(item));
@@ -5548,6 +5555,35 @@ function initLeaderboardPage() {
   load(true);
 }
 
+// paskyra.html: "Rodyti mane viešoje lyderių lentelėje". Saved as soon as it
+// changes; hidden students are left out of lyderiai.html completely
+// (supabase/updates/2026-11-28-leaderboard-hide.sql). No database answer
+// yet: no switch.
+async function initLeaderboardToggle(session) {
+  const row = document.getElementById('account-lb-row');
+  const box = document.getElementById('account-lb-show');
+  if (!row || !box) return;
+  const res = await callApi('/rest/v1/rpc/my_leaderboard_hidden', { body: {}, token: session.access_token });
+  if (!res.ok || !res.data || res.data.ok !== true) return;
+  box.checked = !res.data.hidden;
+  row.hidden = false;
+  const error = document.getElementById('account-error');
+  box.addEventListener('change', async () => {
+    const show = box.checked;
+    box.disabled = true;
+    showBanner(error, '');
+    const current = await getSession();
+    const saved = current
+      ? await callApi('/rest/v1/rpc/set_leaderboard_hidden', { body: { p_hidden: !show }, token: current.access_token })
+      : { ok: false, status: 0 };
+    box.disabled = false;
+    if (!saved.ok || !saved.data || saved.data.ok !== true) {
+      box.checked = !show;
+      showBanner(error, saved.status === 0 ? NETWORK_FAILED_MSG : 'Nepavyko išsaugoti. Pabandyk dar kartą.');
+    }
+  });
+}
+
 // paskyra.html: the points star beside the name, and for teachers (or anyone
 // who has some) the social hours as a detail line, whose certificates open in
 // a window.
@@ -5561,6 +5597,7 @@ async function initAccountRewards(session, isTeacher) {
     slot.replaceChildren(buildPointsBadge(points.total));
     slot.hidden = false;
   }
+  initLeaderboardToggle(session);
   const items = hours && Array.isArray(hours.items) ? hours.items : [];
   if (hours && (isTeacher || items.length)) {
     document.getElementById('account-hours').textContent = `${formatHours(hours.minutes)} val.`;
