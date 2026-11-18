@@ -1835,6 +1835,30 @@ textarea.field-control { min-height: 96px; resize: vertical; line-height: 1.5; }
 .review-denied[hidden] { display: none; }
 .review-denied { display: grid; justify-items: start; gap: var(--space-4); max-width: 560px; margin-inline: auto; }
 
+/* Administration (admin.html): one card per tool. */
+.admin { max-width: 960px; margin-inline: auto; }
+.admin[hidden] { display: none; }
+.admin-title { font-size: clamp(2rem, 1.5vw + 1.6rem, 2.8rem); margin-bottom: var(--space-6); }
+.admin-tools { display: grid; gap: var(--space-5); grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.admin-tools[hidden], .admin-tool[hidden] { display: none; }
+.admin-tool {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  padding: var(--space-5);
+  background: var(--paper-raised);
+  border: 1.5px solid var(--ink-900);
+  border-radius: var(--radius-md);
+  box-shadow: var(--stamp-sm);
+  color: var(--ink-900);
+  transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out);
+}
+.admin-tool:hover { transform: translate(-3px, -3px); box-shadow: var(--stamp-md); }
+.admin-tool:focus-visible { outline: 3px solid var(--pen-blue); outline-offset: 3px; }
+.admin-tool h2 { font-size: 1.3rem; }
+.admin-tool-status { font-weight: 600; color: var(--pen-blue); }
+.admin-tool-status:empty { display: none; }
+
 /* Registration codes (kodai.html) */
 .codes { max-width: 560px; margin-inline: auto; }
 .codes .account-edit-title { margin-bottom: var(--space-5); }

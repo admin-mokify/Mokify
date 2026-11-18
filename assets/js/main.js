@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initChat();
   initReviewPage();
   initCodesPage();
+  initAdminPage();
   initNotifications();
 });
 
@@ -522,7 +523,9 @@ function initAccountHeader() {
     .forEach((a) => a.classList.add('guest-only'));
   root.classList.add('signed-in');
 
-  // Students' own pages, first in the menu once logged in.
+  // Students' own pages, in the menu right after Apie (the order is: Apie,
+  // Mokytojai, Susitikimai, Žinutės, Pagalba, then Administravimas for staff;
+  // the logo stays first and the account button last).
   const memberPages = [['mokytojai.html', 'Mokytojai'], ['susitikimai.html', 'Susitikimai'], ['zinutes.html', 'Žinutės', 'messages']];
   // The address may or may not end in ".html", depending on the web host.
   const currentPage = window.location.pathname.replace(/\/$/, '').replace(/\.html$/, '');
@@ -537,7 +540,9 @@ function initAccountHeader() {
       if (currentPage.endsWith(`/${href.replace(/\.html$/, '')}`)) a.setAttribute('aria-current', 'page');
       return a;
     });
-    menu.prepend(...links);
+    const about = menu.querySelector('a[href="apie.html"]');
+    if (about) about.after(...links);
+    else menu.prepend(...links);
     return links;
   });
 
@@ -561,6 +566,9 @@ function initAccountHeader() {
     }
     // The messages page keeps the count up to date itself.
     if (!document.getElementById('chat')) fetchUnreadCount(session).then(setNavUnread);
+    fetchStaffRoles(session).then((roles) => {
+      if (roles.admin || roles.reviewer) finderLinks.push(...addAdminNavLink(currentPage));
+    });
     const profile = await fetchOwnProfile(session);
     if (profile && profile.avatar) img.src = profile.avatar;
   });
@@ -1379,8 +1387,6 @@ function initAccountPage() {
     }
     showProfile(profile);
     initTeacherCard(teacher, school);
-    initReviewerLink(session);
-    initAdminLink(session);
     setText('account-school', school === undefined ? 'Nepavyko įkelti' : school && school.name);
     if (school && !school.active) {
       showBanner(
@@ -2972,12 +2978,80 @@ function initReviewPage() {
   load();
 }
 
-// paskyra.html: reviewers get a way to the review page.
-async function initReviewerLink(session) {
-  const link = document.getElementById('review-link');
-  if (!link) return;
-  const res = await callApi('/rest/v1/rpc/is_reviewer', { body: {}, token: session.access_token });
-  link.hidden = !(res.ok && res.data === true);
+// ---------------------------------------------------------------------------
+// Administration (admin.html): one place for Mokify's own tools. Who may use
+// which tool is decided by the database: admins (public.admins) create
+// registration codes, reviewers (public.reviewers) check documents. Anyone
+// with either role sees "Administravimas" in the menu.
+// ---------------------------------------------------------------------------
+
+// { admin, reviewer } for the signed-in student; both false if unknown.
+async function fetchStaffRoles(session) {
+  const ask = (fn) => callApi(`/rest/v1/rpc/${fn}`, { body: {}, token: session.access_token })
+    .then((res) => res.ok && res.data === true);
+  const [admin, reviewer] = await Promise.all([ask('is_admin'), ask('is_reviewer')]);
+  return { admin, reviewer };
+}
+
+const ADMIN_PAGES = ['admin', 'tikrinimas', 'kodai'];
+
+// Adds "Administravimas" to the menus, after Pagalba (the account button
+// stays last).
+function addAdminNavLink(currentPage) {
+  return ['.nav-links', '.mobile-menu'].flatMap((selector) => {
+    const menu = document.querySelector(selector);
+    if (!menu || menu.querySelector('a[href="admin.html"]')) return [];
+    const a = document.createElement('a');
+    a.href = 'admin.html';
+    a.textContent = 'Administravimas';
+    if (ADMIN_PAGES.some((page) => currentPage.endsWith(`/${page}`))) a.setAttribute('aria-current', 'page');
+    const help = menu.querySelector('a[href="pagalba.html"]');
+    if (help) help.after(a);
+    else menu.append(a);
+    return [a];
+  });
+}
+
+function initAdminPage() {
+  const page = document.getElementById('admin');
+  if (!page) return;
+  if (!readSession()) {
+    window.location.replace('prisijungti.html?next=admin.html');
+    return;
+  }
+
+  const deny = () => {
+    page.hidden = true;
+    document.getElementById('admin-denied').hidden = false;
+  };
+
+  getSession().then(async (session) => {
+    if (!session) {
+      if (!readSession()) window.location.replace('prisijungti.html?next=admin.html');
+      else showBanner(document.getElementById('admin-error'), NETWORK_FAILED_MSG);
+      return;
+    }
+    const roles = await fetchStaffRoles(session);
+    if (!roles.admin && !roles.reviewer) {
+      deny();
+      return;
+    }
+    document.getElementById('admin-codes').hidden = !roles.admin;
+    const review = document.getElementById('admin-review');
+    review.hidden = !roles.reviewer;
+    page.querySelector('.admin-tools').hidden = false;
+
+    // How many documents are waiting to be checked.
+    if (roles.reviewer) {
+      const data = await reviewRpc(session, 'review_queue', { p_status: 'pending' });
+      const waiting = data.ok && data.counts ? Number(data.counts.pending) || 0 : null;
+      if (waiting !== null) {
+        document.getElementById('admin-review-status').textContent = waiting
+          ? `Laukia ${waiting} ${pluralLt(waiting, 'dokumentas', 'dokumentai', 'dokumentų')}`
+          : 'Visi dokumentai patikrinti';
+      }
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -3252,13 +3326,6 @@ function initCodesPage() {
   loadSchools();
 }
 
-// paskyra.html: admins get a way to the codes page.
-async function initAdminLink(session) {
-  const link = document.getElementById('codes-link');
-  if (!link) return;
-  const res = await callApi('/rest/v1/rpc/is_admin', { body: {}, token: session.access_token });
-  link.hidden = !(res.ok && res.data === true);
-}
 
 // --- Lessons: one-on-one video sessions, arranged in the chat --------------
 // (supabase/updates/2026-11-14-lessons.sql; the call itself is pamoka.html)
