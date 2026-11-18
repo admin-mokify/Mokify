@@ -2188,6 +2188,11 @@ function initTeacherFinder() {
       row.querySelector('dd').classList.add('is-verified');
       details.appendChild(row);
     }
+    if (t.rating) {
+      const row = detail('Įvertinimas', '');
+      row.querySelector('dd').appendChild(ratingLine(t.rating));
+      details.appendChild(row);
+    }
     li.appendChild(details);
 
     const write = document.createElement('a');
@@ -2295,6 +2300,12 @@ function initTeacherFinder() {
     else selectedSchools.clear();
     teachers = result.teachers;
     render();
+    // Students' ratings of the teachers, added once they arrive.
+    const ratings = await fetchTeacherRatings(session, teachers.map((t) => t.id));
+    if (ratings.size) {
+      teachers.forEach((t) => { t.rating = ratings.get(t.id) || null; });
+      render();
+    }
   });
 }
 // ---------------------------------------------------------------------------
@@ -4114,6 +4125,26 @@ function initUsersPage() {
     rows.push(detail('Išsiuntė žinučių', String(u.messages_sent || 0)));
     rows.push(detail('Pamokų', String(u.lessons || 0)));
     if (Number(u.social_minutes) > 0) rows.push(detail('Socialinės valandos', `${formatHours(u.social_minutes)} val.`));
+    // Ratings: by students of this teacher, and by teachers of this student
+    // (attention and interest; only admins see these).
+    const rated = (r) => r && Number(r.count) > 0 && { average: Number(r.average), count: Number(r.count) };
+    const asTeacher = rated(u.rating_teacher);
+    const asStudent = rated(u.rating_student);
+    if (asTeacher) rows.push(detail('Mokinių įvertinimas', formatRating(asTeacher)));
+    if (asStudent) rows.push(detail('Dėmesingumas pamokose', formatRating(asStudent)));
+    if (Array.isArray(u.ratings) && u.ratings.length) {
+      const row = detail('Naujausi įvertinimai', '');
+      const ul = document.createElement('ul');
+      ul.className = 'account-doc-list';
+      ul.append(...u.ratings.map((r) => {
+        const li = document.createElement('li');
+        const who = r.kind === 'teacher' ? 'kaip mokytoją' : 'kaip mokinį';
+        li.textContent = `${r.stars}/5 ${who}${r.by ? `, @${r.by}` : ''}, ${formatReviewTime(r.at)}${r.comment ? ` – „${r.comment}“` : ''}`;
+        return li;
+      }));
+      row.querySelector('dd').replaceChildren(ul);
+      rows.push(row);
+    }
     setPoints(u.points);
     const roles = [u.admin && 'administratorius', u.reviewer && 'dokumentų tikrintojas'].filter(Boolean);
     if (roles.length) rows.push(detail('Vaidmenys', roles.join(', ')));
@@ -4747,6 +4778,132 @@ function buildHoursCert(code) {
   return cert;
 }
 
+// --- Ratings after a lesson (supabase/updates/2026-11-25-ratings.sql) -------
+
+// Teachers' averages from students: Map id -> { average, count }.
+async function fetchTeacherRatings(session, ids) {
+  const list = [...new Set(ids)].filter((id) => UUID_PATTERN.test(id || '')).slice(0, 500);
+  if (!session || !list.length) return new Map();
+  const res = await callApi('/rest/v1/rpc/teacher_ratings', { body: { p_ids: list }, token: session.access_token });
+  if (!res.ok || !Array.isArray(res.data)) return new Map();
+  return new Map(res.data.map((r) => [r.id, { average: Number(r.average), count: Number(r.count) }]));
+}
+
+// "4,8 iš 5 (12 įvertinimų)"
+const formatRating = (r) => `${String(r.average.toFixed(1)).replace('.', ',')} iš 5 (${r.count} ${pluralLt(r.count, 'įvertinimas', 'įvertinimai', 'įvertinimų')})`;
+
+// A small star before a rating, for the teacher list and profiles.
+function ratingLine(r) {
+  const span = document.createElement('span');
+  span.className = 'rating-line';
+  const star = document.createElement('span');
+  star.className = 'rating-line-star';
+  star.appendChild(buildStar());
+  span.append(star, document.createTextNode(formatRating(r)));
+  return span;
+}
+
+const RATING_ERRORS = {
+  network: NETWORK_FAILED_MSG,
+  bad_stars: 'Pasirink nuo 1 iki 5 žvaigždučių.',
+  too_long: 'Komentaras gali būti iki 300 simbolių.',
+  too_late: 'Įvertinti galima tik 14 dienų po pamokos.',
+  not_finished: 'Įvertinti galima tik įvykusią pamoką.',
+  failed: 'Nepavyko išsaugoti. Pabandyk dar kartą.',
+};
+
+let ratingFormCount = 0;
+// The rating form at the end of a finished lesson. The student rates the
+// teacher; the teacher rates the student's attention and interest.
+function buildRatingForm(res) {
+  ratingFormCount += 1;
+  const uid = `rating-${ratingFormCount}`;
+  const mine = res.my_rating || null;
+  const form = document.createElement('form');
+  form.className = 'rating';
+  form.noValidate = true;
+
+  // (Without the name inside the sentence: Lithuanian names would need a
+  // different case there.)
+  const title = textEl('h2', 'rating-title', res.i_teach
+    ? 'Kaip vertini mokinio dėmesingumą ir susidomėjimą pamoka?'
+    : 'Kaip vertini savo mokytoją?');
+  title.id = `${uid}-title`;
+
+  // Five radio buttons drawn as stars. In the page they are 5..1, shown
+  // right to left, so a star and the ones before it light up together.
+  const stars = document.createElement('fieldset');
+  stars.className = 'rating-stars';
+  stars.setAttribute('aria-labelledby', title.id);
+  for (let n = 5; n >= 1; n -= 1) {
+    const input = document.createElement('input');
+    input.type = 'radio';
+    input.name = 'stars';
+    input.value = String(n);
+    input.id = `${uid}-${n}`;
+    input.className = 'rating-input';
+    if (mine && mine.stars === n) input.checked = true;
+    const label = document.createElement('label');
+    label.htmlFor = input.id;
+    label.className = 'rating-star';
+    label.title = `${n} iš 5`;
+    const svg = svgEl('svg', { viewBox: '0 0 24 24', 'aria-hidden': 'true' });
+    svg.appendChild(svgEl('path', { d: 'M12 1.8l3.05 6.5 7.1.86-5.24 4.88 1.37 7.03L12 17.6l-6.28 3.47 1.37-7.03L1.85 9.16l7.1-.86z', fill: 'currentColor' }));
+    label.append(svg, textEl('span', 'sr-only', `${n} iš 5`));
+    stars.append(input, label);
+  }
+
+  const field = document.createElement('div');
+  field.className = 'field';
+  const commentLabel = textEl('label', 'field-label', 'Komentaras Mokify komandai (neprivaloma)');
+  commentLabel.htmlFor = `${uid}-comment`;
+  const comment = document.createElement('textarea');
+  comment.className = 'field-control';
+  comment.id = `${uid}-comment`;
+  comment.rows = 2;
+  comment.maxLength = 300;
+  comment.value = (mine && mine.comment) || '';
+  field.append(commentLabel, comment);
+
+  const error = textEl('p', 'form-error', '');
+  error.setAttribute('role', 'alert');
+  const done = textEl('p', 'form-done', '');
+  done.setAttribute('role', 'status');
+  const submit = document.createElement('button');
+  submit.type = 'submit';
+  submit.className = 'btn btn-primary';
+  submit.textContent = mine ? 'Atnaujinti įvertinimą' : 'Įvertinti';
+
+  form.append(title, stars, field, error, done, submit);
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    showBanner(error, '');
+    showBanner(done, '');
+    const chosen = form.querySelector('input[name="stars"]:checked');
+    if (!chosen) {
+      showBanner(error, RATING_ERRORS.bad_stars);
+      return;
+    }
+    setBusy(submit, true, 'Saugoma…');
+    const session = await getSession();
+    const result = session
+      ? await callApi('/rest/v1/rpc/lesson_rate', {
+        body: { p_lesson: res.lesson, p_stars: Number(chosen.value), p_comment: comment.value.trim() || null },
+        token: session.access_token,
+      })
+      : { ok: false, status: 0 };
+    setBusy(submit, false);
+    const data = result.data || {};
+    if (!result.ok || data.ok !== true) {
+      showBanner(error, RATING_ERRORS[result.status === 0 ? 'network' : data.error] || RATING_ERRORS.failed);
+      return;
+    }
+    submit.textContent = 'Atnaujinti įvertinimą';
+    showBanner(done, 'Ačiū! Įvertinimas išsaugotas.');
+  });
+  return form;
+}
+
 // The end of a finished lesson (pamoka.html): the points it gave, and for
 // its teacher the social hours with their certificate.
 function renderLessonRewards(container, res) {
@@ -4761,6 +4918,8 @@ function renderLessonRewards(container, res) {
     parts.push(buildHoursReward({ minutes: res.hours.minutes, gained: true, sub: total ? `Iš viso: ${formatHours(total)} val.` : '' }));
     parts.push(buildHoursCert(res.hours.code));
   }
+  // Rating the other student (finished lessons, for 14 days).
+  if (res.can_rate && res.lesson) parts.push(buildRatingForm(res));
   container.replaceChildren(...parts);
   container.hidden = !parts.length;
 }
@@ -5278,6 +5437,12 @@ function initChat() {
         declined: 'Pasiūlymas atmestas', cancelled: 'Pamoka atšaukta', expired: 'Pasiūlymas nebegalioja', over: 'Pamoka baigėsi',
       }[l.state] || 'Pamoka'}: ${when}.${l.state === 'over' ? earned : ''}`;
     }
+    // A finished lesson not rated yet: the way to its rating (on the lesson page).
+    if (l.state === 'over' && l.can_rate && !l.rated) {
+      const rate = joinLink(l.id);
+      rate.textContent = 'Įvertinti';
+      actions.appendChild(rate);
+    }
   }
 
   // Calls an agreed lesson off, after a warning. The other student gets a
@@ -5455,6 +5620,11 @@ function initChat() {
       rows.push(profileRow('Moko', p.levels.map((key) => LEVEL_LABELS[key].replace(/ \(.*\)$/, '')).join(', ')));
       if (p.diplomas && p.diplomas.length) rows.push(profileRow('Patvirtinti diplomai ir pažymėjimai', p.diplomas));
       if (p.grades_verified) rows.push(profileRow('Pažymiai iš TAMO', 'Patvirtinti'));
+      if (p.rating) {
+        const row = profileRow('Įvertinimas', '');
+        row.querySelector('dd').appendChild(ratingLine(p.rating));
+        rows.push(row);
+      }
     }
     profileDetails.replaceChildren(...rows);
     profileDetails.hidden = !rows.length;
@@ -5469,8 +5639,18 @@ function initChat() {
     profileDialog.showModal();
     const full = await fetchChatPartner(session, partner.id);
     if (current !== partner || !profileDialog.open) return;
-    if (full) fillProfile(full);
-    else showBanner(profileError, full === null ? 'Šio moksleivio profilis nepasiekiamas.' : 'Nepavyko įkelti profilio. Pabandyk dar kartą vėliau.');
+    if (!full) {
+      showBanner(profileError, full === null ? 'Šio moksleivio profilis nepasiekiamas.' : 'Nepavyko įkelti profilio. Pabandyk dar kartą vėliau.');
+      return;
+    }
+    fillProfile(full);
+    // A teacher: students' rating of them.
+    if (full.is_teacher) {
+      const ratings = await fetchTeacherRatings(session, [partner.id]);
+      if (current === partner && profileDialog.open && ratings.has(partner.id)) {
+        fillProfile({ ...full, rating: ratings.get(partner.id) });
+      }
+    }
   });
   // Clicking the dimmed area around the window closes it.
   profileDialog.addEventListener('click', (e) => {

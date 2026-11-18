@@ -1951,6 +1951,39 @@ textarea.field-control { min-height: 96px; resize: vertical; line-height: 1.5; }
 .hours-link { font-size: 0.85rem; overflow-wrap: anywhere; color: var(--pen-blue); }
 #hours-list .users-open[aria-pressed="true"] { background: var(--pen-blue-light); }
 
+/* Rating a lesson: five stars (radio buttons), lit up to the chosen one. */
+.rating {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border: 1.5px solid var(--ink-900);
+  border-radius: var(--radius-md);
+  background: var(--paper-raised);
+}
+.rating-title { font-size: 1.15rem; }
+.rating-stars {
+  display: inline-flex;
+  flex-direction: row-reverse;
+  justify-content: flex-end;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.rating-input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+.rating-star { display: inline-flex; width: 40px; height: 40px; color: #D9D2C3; cursor: pointer; transition: color var(--dur-fast) ease, transform var(--dur-fast) ease; }
+.rating-star svg { width: 100%; height: 100%; }
+.rating-input:checked ~ .rating-star,
+.rating-star:hover,
+.rating-star:hover ~ .rating-star { color: #F5B400; }
+.rating-star:hover { transform: scale(1.1); }
+.rating-input:focus-visible + .rating-star { outline: 3px solid var(--pen-blue); outline-offset: 2px; border-radius: 6px; }
+
+/* "★ 4,8 iš 5 (12 įvertinimų)" in the teacher list and profiles. */
+.rating-line { display: inline-flex; align-items: center; gap: var(--space-1); }
+.rating-line-star { display: inline-flex; width: 18px; height: 18px; }
+.rating-line-star svg { width: 100%; height: 100%; }
+
 /* The public check of a certificate (patvirtinimas.html). */
 .verify { max-width: 560px; margin-inline: auto; display: grid; gap: var(--space-5); }
 .verify-status { font-weight: 600; padding: var(--space-3) var(--space-4); border-radius: var(--radius-sm); border: 1.5px solid var(--ink-300); }

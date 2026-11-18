@@ -2579,7 +2579,9 @@ function initMeetings() {
     const name = res.partner && res.partner.name;
     return {
       title: 'Pamoka įvyko',
-      text: name ? `Ačiū už pamoką su ${name}!` : 'Ačiū už pamoką!',
+      // "Pamoka: Ona Onaitė" rather than "su Ona Onaitė", which would need
+      // the name in another case.
+      text: name ? `Ačiū už pamoką! ${res.i_teach ? 'Mokinys' : 'Mokytojas'}: ${name}.` : 'Ačiū už pamoką!',
       rewards: res,
     };
   }
