@@ -65,6 +65,7 @@
         <form class="auth-form" id="codes-form" novalidate>
           <div class="field">
             <label class="field-label" for="codes-school">Mokykla</label>
+            <input class="field-control" type="search" id="codes-school-search" placeholder="Ieškoti mokyklos…" autocomplete="off" spellcheck="false" aria-label="Ieškoti mokyklos" aria-controls="codes-school">
             <select class="field-control" id="codes-school" name="school" aria-describedby="codes-school-error" required>
               <option value="" selected disabled>Kraunama…</option>
             </select>
@@ -100,6 +101,7 @@
           </div>
 
           <p class="form-error" id="codes-error" role="alert"></p>
+          <p class="form-done" id="codes-done" role="status"></p>
 
           <button type="submit" class="btn btn-primary btn-block" id="codes-submit">Sukurti kodus</button>
         </form>

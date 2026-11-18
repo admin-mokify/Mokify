@@ -21,6 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initCodesPage();
   initAdminPage();
   initUsersPage();
+  initSchoolsPage();
   initNotifications();
 });
 
@@ -2994,7 +2995,7 @@ async function fetchStaffRoles(session) {
   return { admin, reviewer };
 }
 
-const ADMIN_PAGES = ['admin', 'tikrinimas', 'kodai', 'vartotojai'];
+const ADMIN_PAGES = ['admin', 'tikrinimas', 'kodai', 'vartotojai', 'mokyklos'];
 
 // Adds "Administravimas" to the menus, after Pagalba (the account button
 // stays last).
@@ -3040,6 +3041,23 @@ function initAdminPage() {
     const prefs = await reviewRpc(session, 'staff_prefs_get', {});
     initAdminTools(session, roles, prefs.ok && Array.isArray(prefs.tool_order) ? prefs.tool_order : []);
 
+    // Schools whose subscription ends within 30 days, or has ended.
+    if (roles.admin) {
+      reviewRpc(session, 'admin_schools', {}).then((data) => {
+        if (!data.ok || !Array.isArray(data.schools)) return;
+        const today = data.today || isoDay(new Date());
+        const soon = data.schools.filter((s) => {
+          const left = daysBetween(today, s.subscription_ends);
+          return left >= 0 && left <= SCHOOL_SOON_DAYS;
+        }).length;
+        const ended = data.schools.filter((s) => s.subscription_ends < today).length;
+        const parts = [];
+        if (soon) parts.push(`${soon} ${pluralLt(soon, 'prenumerata baigiasi', 'prenumeratos baigiasi', 'prenumeratų baigiasi')} per ${SCHOOL_SOON_DAYS} d.`);
+        if (ended) parts.push(`${ended} ${pluralLt(ended, 'baigėsi', 'baigėsi', 'baigėsi')}`);
+        document.getElementById('admin-schools-status').textContent = parts.join(', ');
+      });
+    }
+
     // How many documents are waiting to be checked.
     if (roles.reviewer) {
       const data = await reviewRpc(session, 'review_queue', { p_status: 'pending' });
@@ -3054,7 +3072,7 @@ function initAdminPage() {
 }
 
 // Which role each tool needs.
-const ADMIN_TOOL_ROLES = { review: 'reviewer', codes: 'admin', users: 'admin' };
+const ADMIN_TOOL_ROLES = { review: 'reviewer', codes: 'admin', schools: 'admin', users: 'admin' };
 
 // The tools list on admin.html: shown in the student's saved order (tools
 // added later come after, in the page's order). The pencil switches on
@@ -3188,6 +3206,310 @@ function initAdminTools(session, roles, savedOrder) {
   };
   list.addEventListener('pointerup', endDrag);
   list.addEventListener('pointercancel', endDrag);
+}
+
+// ---------------------------------------------------------------------------
+// Schools (mokyklos.html), for admins: change a school's name and contact,
+// set or extend its subscription, delete it. Rules in
+// supabase/updates/2026-11-21-admin-schools.sql.
+// ---------------------------------------------------------------------------
+
+const SCHOOL_SOON_DAYS = 30;
+
+// Whole days from one "YYYY-MM-DD" to another (negative if b is earlier).
+function daysBetween(a, b) {
+  const day = (s) => {
+    const [y, m, d] = String(s).split('-').map(Number);
+    return Date.UTC(y, m - 1, d);
+  };
+  return Math.round((day(b) - day(a)) / 86400000);
+}
+
+// "2027 m. rugpjūčio 31 d."
+function formatLtDate(iso) {
+  const [y, m, d] = String(iso).split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('lt-LT', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+const SCHOOLS_ERRORS = {
+  network: NETWORK_FAILED_MSG,
+  bad_name: 'Įvesk mokyklos pavadinimą (2–200 simbolių).',
+  bad_email: 'Patikrink el. pašto adresą.',
+  bad_date: 'Pasirink datą nuo 2020 m. iki dešimties metų į priekį.',
+  bad_months: 'Pratęsti galima nuo 1 iki 60 mėnesių.',
+  exists: 'Mokykla tokiu pavadinimu jau yra.',
+  not_found: 'Šios mokyklos nebėra.',
+  missing: 'Mokyklų valdymas dar neįjungtas.',
+  failed: 'Nepavyko. Pabandyk dar kartą.',
+};
+
+function initSchoolsPage() {
+  const page = document.getElementById('schools');
+  if (!page) return;
+  if (!readSession()) {
+    window.location.replace('prisijungti.html?next=mokyklos.html');
+    return;
+  }
+
+  const search = document.getElementById('schools-search');
+  const error = document.getElementById('schools-error');
+  const done = document.getElementById('schools-done');
+  const count = document.getElementById('schools-count');
+  const list = document.getElementById('schools-list');
+  const dialog = document.getElementById('school-dialog');
+  const form = document.getElementById('school-form');
+  const nameInput = document.getElementById('school-edit-name');
+  const emailInput = document.getElementById('school-edit-email');
+  const endsInput = document.getElementById('school-edit-ends');
+  const formError = document.getElementById('school-error');
+  const saveBtn = document.getElementById('school-save');
+  const confirmDialog = document.getElementById('school-confirm');
+  const confirmError = document.getElementById('school-confirm-error');
+  let schools = [];
+  let today = isoDay(new Date());
+  let open = null; // The school in the dialog.
+
+  const deny = (text) => {
+    page.hidden = true;
+    if (text) document.getElementById('schools-denied-text').textContent = text;
+    document.getElementById('schools-denied').hidden = false;
+  };
+  const rpc = async (fn, params) => {
+    const session = await getSession();
+    if (!session) return { ok: false, error: 'network' };
+    return reviewRpc(session, fn, params);
+  };
+  const fail = (res, banner = error) => {
+    if (res.error === 'forbidden') deny();
+    else if (res.error === 'missing') deny(SCHOOLS_ERRORS.missing);
+    else showBanner(banner, SCHOOLS_ERRORS[res.error] || SCHOOLS_ERRORS.failed);
+  };
+
+  const matches = (s) => {
+    const words = search.value.toLowerCase().split(/\s+/).filter(Boolean);
+    const text = `${s.name} ${s.contact_email || ''}`.toLowerCase();
+    return words.every((w) => text.includes(w));
+  };
+
+  function statusOf(s) {
+    const left = daysBetween(today, s.subscription_ends);
+    if (left < 0) return { text: `Prenumerata baigėsi ${formatLtDate(s.subscription_ends)}`, cls: 'is-ended' };
+    const when = `Prenumerata iki ${formatLtDate(s.subscription_ends)}`;
+    if (left === 0) return { text: `${when} (baigiasi šiandien)`, cls: 'is-soon' };
+    if (left <= SCHOOL_SOON_DAYS) return { text: `${when} (liko ${left} d.)`, cls: 'is-soon' };
+    return { text: when, cls: '' };
+  }
+
+  function renderList() {
+    const shown = schools.filter(matches);
+    list.replaceChildren(...shown.map((s) => {
+      const li = document.createElement('li');
+      li.className = 'users-row schools-row';
+      const info = document.createElement('div');
+      info.className = 'schools-info';
+      const name = document.createElement('span');
+      name.className = 'users-name';
+      name.textContent = s.name;
+      const status = statusOf(s);
+      const when = document.createElement('span');
+      when.className = `schools-status ${status.cls}`.trim();
+      when.textContent = status.text;
+      const meta = document.createElement('span');
+      meta.className = 'users-meta text-muted';
+      meta.textContent = [
+        `${s.students} ${pluralLt(s.students, 'moksleivis', 'moksleiviai', 'moksleivių')}`,
+        `${s.codes} ${pluralLt(s.codes, 'kodas', 'kodai', 'kodų')} (panaudota ${s.used})`,
+        s.contact_email,
+      ].filter(Boolean).join(' · ');
+      info.append(name, when, meta);
+
+      const actions = document.createElement('div');
+      actions.className = 'schools-actions';
+      const button = (label, aria, onClick, cls = 'btn btn-ghost btn-sm') => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = cls;
+        b.textContent = label;
+        b.setAttribute('aria-label', aria);
+        b.addEventListener('click', () => onClick(b));
+        return b;
+      };
+      actions.append(
+        button('+1 mėn.', `Pratęsti „${s.name}“ prenumeratą mėnesiu`, (b) => extend(s, 1, b)),
+        button('+1 metai', `Pratęsti „${s.name}“ prenumeratą metais`, (b) => extend(s, 12, b)),
+        button('Keisti', `Keisti „${s.name}“`, () => showSchool(s)),
+      );
+      li.append(info, actions);
+      return li;
+    }));
+    const word = pluralLt(shown.length, 'mokykla', 'mokyklos', 'mokyklų');
+    count.textContent = search.value.trim() && shown.length !== schools.length
+      ? `Rasta ${shown.length} ${word} iš ${schools.length}`
+      : `${shown.length} ${word}`;
+  }
+
+  async function load() {
+    const res = await rpc('admin_schools', {});
+    if (!res.ok) {
+      count.textContent = '';
+      fail(res);
+      return;
+    }
+    if (typeof res.today === 'string') today = res.today;
+    schools = Array.isArray(res.schools) ? res.schools : [];
+    renderList();
+  }
+
+  search.addEventListener('input', renderList);
+  document.getElementById('schools-search-form').addEventListener('submit', (e) => e.preventDefault());
+
+  const merge = (s, fresh) => {
+    Object.assign(s, {
+      name: fresh.name, contact_email: fresh.contact_email, subscription_ends: fresh.subscription_ends,
+    });
+    schools.sort((a, b) => a.name.localeCompare(b.name, 'lt'));
+  };
+
+  async function extend(s, months, btn) {
+    showBanner(error, '');
+    showBanner(done, '');
+    setBusy(btn, true, '…');
+    const res = await rpc('admin_extend_school', { p_school: s.id, p_months: months });
+    setBusy(btn, false);
+    if (!res.ok || !res.school) {
+      fail(res);
+      if (res.error === 'not_found') load();
+      return;
+    }
+    merge(s, res.school);
+    renderList();
+    // (The date already ends with "d.", so no full stop after it.)
+    showBanner(done, `„${s.name}“ prenumerata pratęsta iki ${formatLtDate(s.subscription_ends)}`);
+  }
+
+  // --- The dialog: change or delete one school ---------------------------------
+
+  const setFieldError = (input, message) => {
+    const field = input.closest('.field');
+    field.classList.toggle('has-error', Boolean(message));
+    field.querySelector('.field-error').textContent = message || '';
+    input.setAttribute('aria-invalid', message ? 'true' : 'false');
+  };
+  const clearFormErrors = () => {
+    [nameInput, emailInput, endsInput].forEach((input) => setFieldError(input, ''));
+    showBanner(formError, '');
+  };
+
+  function showSchool(s) {
+    open = s;
+    clearFormErrors();
+    showBanner(done, '');
+    nameInput.value = s.name;
+    emailInput.value = s.contact_email || '';
+    endsInput.value = s.subscription_ends;
+    const [y, m, d] = today.split('-').map(Number);
+    endsInput.min = '2020-01-01';
+    endsInput.max = `${y + 10}-${String(m).padStart(2, '0')}-${String(Math.min(d, 28)).padStart(2, '0')}`;
+    dialog.showModal();
+    nameInput.focus();
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!open) return;
+    clearFormErrors();
+    const name = nameInput.value.trim().replace(/\s+/g, ' ');
+    const email = emailInput.value.trim();
+    let ok = true;
+    if (name.length < 2 || name.length > 200) {
+      setFieldError(nameInput, SCHOOLS_ERRORS.bad_name);
+      ok = false;
+    }
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      setFieldError(emailInput, SCHOOLS_ERRORS.bad_email);
+      ok = false;
+    }
+    if (!endsInput.value || endsInput.value < endsInput.min || endsInput.value > endsInput.max) {
+      setFieldError(endsInput, SCHOOLS_ERRORS.bad_date);
+      ok = false;
+    }
+    if (!ok) return;
+
+    const s = open;
+    setBusy(saveBtn, true, 'Saugoma…');
+    const res = await rpc('admin_update_school', {
+      p_school: s.id, p_name: name, p_contact_email: email || null, p_subscription_ends: endsInput.value,
+    });
+    setBusy(saveBtn, false);
+    if (!res.ok || !res.school) {
+      const field = { bad_name: nameInput, exists: nameInput, bad_email: emailInput, bad_date: endsInput }[res.error];
+      if (field) setFieldError(field, SCHOOLS_ERRORS[res.error]);
+      else fail(res, formError);
+      return;
+    }
+    merge(s, res.school);
+    renderList();
+    dialog.close();
+    showBanner(done, `„${s.name}“ pakeitimai išsaugoti.`);
+  });
+
+  document.getElementById('school-close').addEventListener('click', () => dialog.close());
+
+  document.getElementById('school-delete').addEventListener('click', () => {
+    if (!open) return;
+    const s = open;
+    showBanner(confirmError, '');
+    const okBtn = document.getElementById('school-confirm-ok');
+    okBtn.hidden = s.students > 0;
+    document.getElementById('school-confirm-text').textContent = s.students > 0
+      ? `„${s.name}“ dar turi ${s.students} ${pluralLt(s.students, 'moksleivį', 'moksleivius', 'moksleivių')}. Mokyklą galima ištrinti tik tada, kai joje neliks moksleivių – juos gali ištrinti skiltyje „Vartotojai“.`
+      : `„${s.name}“ ir visi ${s.codes} jos registracijos ${pluralLt(s.codes, 'kodas', 'kodai', 'kodų')} bus ištrinti visam laikui.`;
+    confirmDialog.showModal();
+  });
+
+  document.getElementById('school-confirm-ok').addEventListener('click', async (e) => {
+    if (!open) return;
+    const s = open;
+    const btn = e.currentTarget;
+    setBusy(btn, true, 'Trinama…');
+    const res = await rpc('admin_delete_school', { p_school: s.id });
+    setBusy(btn, false);
+    if (!res.ok) {
+      if (res.error === 'has_students') {
+        s.students = Number(res.students) || s.students;
+        showBanner(confirmError, `Mokykloje yra ${s.students} ${pluralLt(s.students, 'moksleivis', 'moksleiviai', 'moksleivių')}, todėl jos ištrinti negalima.`);
+        btn.hidden = true;
+        renderList();
+      } else {
+        fail(res, confirmError);
+      }
+      return;
+    }
+    confirmDialog.close();
+    dialog.close();
+    schools = schools.filter((x) => x.id !== s.id);
+    renderList();
+    showBanner(done, `Mokykla „${s.name}“ ištrinta.`);
+  });
+
+  dialog.addEventListener('close', () => {
+    if (!confirmDialog.open) open = null;
+  });
+
+  (async () => {
+    const session = await getSession();
+    if (!session) {
+      if (!readSession()) window.location.replace('prisijungti.html?next=mokyklos.html');
+      else showBanner(error, NETWORK_FAILED_MSG);
+      return;
+    }
+    const roles = await fetchStaffRoles(session);
+    if (!roles.admin) {
+      deny();
+      return;
+    }
+    load();
+  })();
 }
 
 // ---------------------------------------------------------------------------
@@ -3565,7 +3887,9 @@ function initCodesPage() {
   const emailInput = document.getElementById('school-email');
   const endsInput = document.getElementById('school-ends');
   const countInput = document.getElementById('codes-count');
+  const schoolSearch = document.getElementById('codes-school-search');
   const error = document.getElementById('codes-error');
+  const done = document.getElementById('codes-done');
   const submit = document.getElementById('codes-submit');
   const result = document.getElementById('codes-result');
   const resultTitle = document.getElementById('codes-result-title');
@@ -3590,6 +3914,18 @@ function initCodesPage() {
   const clearErrors = () => {
     [select, nameInput, emailInput, endsInput, countInput].forEach((input) => setError(input, ''));
     showBanner(error, '');
+    showBanner(done, '');
+  };
+
+  // A new school can be added with no codes (they can be made later), so
+  // then the count may be 0 and the button says what will happen.
+  const minCount = () => (select.value === NEW_SCHOOL ? 0 : 1);
+  const updateSubmitLabel = () => {
+    if (submit.disabled && submit.dataset.label) return;
+    const count = Number(countInput.value);
+    submit.textContent = select.value !== NEW_SCHOOL
+      ? 'Sukurti kodus'
+      : (count === 0 ? 'Sukurti mokyklą' : 'Sukurti mokyklą ir kodus');
   };
 
   // A new school's subscription: by default to the end of the coming
@@ -3602,11 +3938,29 @@ function initCodesPage() {
   };
 
   const showNewFields = () => {
-    newBox.hidden = select.value !== NEW_SCHOOL;
+    const adding = select.value === NEW_SCHOOL;
+    newBox.hidden = !adding;
+    countInput.min = String(minCount());
+    // Adding a school: by default without codes; picking one: 30 codes.
+    if (adding && countInput.dataset.mode !== 'new') countInput.value = '0';
+    if (!adding && countInput.dataset.mode === 'new' && Number(countInput.value) === 0) countInput.value = '30';
+    countInput.dataset.mode = adding ? 'new' : 'existing';
+    updateSubmitLabel();
+  };
+
+  // The search box narrows the list to schools whose name has every typed
+  // word. The chosen school stays in the list, and a single match is chosen.
+  const matchesSearch = (s) => {
+    const words = schoolSearch.value.toLowerCase().split(/\s+/).filter(Boolean);
+    const name = s.name.toLowerCase();
+    return words.every((w) => name.includes(w));
   };
 
   function fillSchools(selectId) {
-    const options = schools.map((s) => {
+    const current = selectId || select.value;
+    const searching = schoolSearch.value.trim() !== '';
+    const shown = schools.filter((s) => s.id === current || matchesSearch(s));
+    const options = shown.map((s) => {
       const option = document.createElement('option');
       option.value = s.id;
       const expired = s.subscription_ends < today;
@@ -3620,15 +3974,24 @@ function initCodesPage() {
     const placeholder = document.createElement('option');
     placeholder.value = '';
     placeholder.disabled = true;
-    placeholder.textContent = 'Pasirink mokyklą';
+    placeholder.textContent = searching && !shown.length ? 'Tokios mokyklos nėra' : 'Pasirink mokyklą';
     const add = document.createElement('option');
     add.value = NEW_SCHOOL;
     add.textContent = 'Pridėti naują mokyklą…';
     select.replaceChildren(placeholder, ...options, add);
-    const keep = selectId && schools.some((s) => s.id === selectId);
-    select.value = keep ? selectId : (schools.length ? '' : NEW_SCHOOL);
+    const usable = shown.filter((s) => s.subscription_ends >= today);
+    if (current === NEW_SCHOOL) select.value = NEW_SCHOOL;
+    else if (current && shown.some((s) => s.id === current)) select.value = current;
+    else if (searching && usable.length === 1) select.value = usable[0].id;
+    else select.value = schools.length ? '' : NEW_SCHOOL;
     showNewFields();
   }
+
+  schoolSearch.addEventListener('input', () => {
+    // A new search starts from no choice, unless adding a school.
+    if (select.value !== NEW_SCHOOL) select.value = '';
+    fillSchools();
+  });
 
   async function loadSchools(selectId) {
     const session = await getSession();
@@ -3655,8 +4018,8 @@ function initCodesPage() {
   function validate() {
     let ok = true;
     const count = Number(countInput.value);
-    if (!Number.isInteger(count) || count < 1 || count > CODES_MAX) {
-      setError(countInput, CODES_ERRORS.bad_count);
+    if (countInput.value.trim() === '' || !Number.isInteger(count) || count < minCount() || count > CODES_MAX) {
+      setError(countInput, minCount() === 0 ? `Galima sukurti nuo 0 iki ${CODES_MAX} kodų.` : CODES_ERRORS.bad_count);
       ok = false;
     }
     if (!select.value) {
@@ -3724,14 +4087,25 @@ function initCodesPage() {
       }
       schools = [...schools, created.school].sort((a, b) => a.name.localeCompare(b.name, 'lt'));
       schoolId = created.school.id;
+      const count = Number(countInput.value);
+      schoolSearch.value = '';
       fillSchools(schoolId);
       nameInput.value = '';
       emailInput.value = '';
+      // Only the school was wanted: it stays chosen, ready for codes later.
+      if (count === 0) {
+        setBusy(submit, false);
+        updateSubmitLabel();
+        showBanner(done, `Mokykla „${created.school.name}“ pridėta. Jos kodus gali sukurti dabar arba vėliau.`);
+        return;
+      }
+      countInput.value = String(count);
     }
 
     const count = Number(countInput.value);
     const data = await reviewRpc(session, 'admin_generate_codes', { p_school: schoolId, p_count: count });
     setBusy(submit, false);
+    updateSubmitLabel();
     if (!data.ok || !Array.isArray(data.codes)) {
       showError(data.error);
       return;
@@ -3747,9 +4121,11 @@ function initCodesPage() {
 
   select.addEventListener('change', () => {
     setError(select, '');
+    showBanner(done, '');
     showNewFields();
     if (select.value === NEW_SCHOOL) nameInput.focus();
   });
+  countInput.addEventListener('input', updateSubmitLabel);
 
   copyBtn.addEventListener('click', async () => {
     if (!made) return;

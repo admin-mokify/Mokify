@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="lt" class="no-js">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mokyklos — Mokify</title>
+<meta name="description" content="Mokify mokyklų ir jų prenumeratų valdymas.">
+<meta name="robots" content="noindex">
+<link rel="icon" href="assets/img/logo-mark.png">
+<link rel="stylesheet" href="assets/css/style.css">
+<script>document.documentElement.classList.replace('no-js','js');</script>
+<script>/* Only for logged-in students. */ try { if (!localStorage.getItem('mokify.session')) location.replace('prisijungti.html?next=mokyklos.html'); } catch (e) {}</script>
+</head>
+<body class="paper">
+
+<a class="skip-link" href="#main">Praleisti ir pereiti prie turinio</a>
+
+<header class="site-header">
+  <div class="container">
+    <div class="nav-shell">
+      <a href="index.html" class="brand">
+        <img src="assets/img/logo-mark.png" alt="" width="30" height="30">
+        Mokify
+      </a>
+
+      <nav class="nav-links" aria-label="Pagrindinis meniu">
+        <a href="apie.html">Apie</a>
+        <a href="pagalba.html">Pagalba</a>
+      </nav>
+
+      <div class="nav-actions">
+        <div class="nav-cta-group">
+          <a href="prisijungti.html" class="btn btn-ghost">Prisijungti</a>
+          <a href="registracija.html" class="btn btn-primary">Pradėti</a>
+        </div>
+        <button class="nav-toggle" aria-label="Atidaryti meniu" aria-expanded="false" aria-controls="mobile-menu">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="mobile-menu" id="mobile-menu">
+      <a href="apie.html">Apie</a>
+      <a href="pagalba.html">Pagalba</a>
+      <a href="prisijungti.html">Prisijungti</a>
+      <a href="registracija.html" class="btn btn-primary btn-block">Pradėti</a>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+
+  <section class="section auth">
+    <div class="container">
+
+      <div class="auth-card review-denied" id="schools-denied" hidden>
+        <h1 class="account-edit-title">Mokyklos</h1>
+        <p id="schools-denied-text">Šis puslapis skirtas tik Mokify komandai.</p>
+        <a href="paskyra.html" class="btn btn-ghost">Grįžti į paskyrą</a>
+      </div>
+
+      <div class="admin users schools" id="schools">
+        <div class="admin-head">
+          <h1 class="admin-title">Mokyklos</h1>
+        </div>
+
+        <form class="users-search" id="schools-search-form" role="search" novalidate>
+          <label class="sr-only" for="schools-search">Ieškoti mokyklos</label>
+          <input class="field-control" type="search" id="schools-search" maxlength="100" autocomplete="off" spellcheck="false" placeholder="Ieškoti mokyklos…">
+        </form>
+
+        <p class="form-error" id="schools-error" role="alert"></p>
+        <p class="form-done" id="schools-done" role="status"></p>
+        <h2 class="users-count" id="schools-count" aria-live="polite">Kraunama…</h2>
+        <ul class="users-list" id="schools-list" aria-labelledby="schools-count"></ul>
+      </div>
+
+      <dialog class="confirm-dialog profile-dialog" id="school-dialog" aria-labelledby="school-dialog-title">
+        <form class="auth-form" id="school-form" novalidate>
+          <h2 class="account-edit-title" id="school-dialog-title">Keisti mokyklą</h2>
+          <div class="field">
+            <label class="field-label" for="school-edit-name">Pavadinimas</label>
+            <input class="field-control" type="text" id="school-edit-name" maxlength="200" autocomplete="off" aria-describedby="school-edit-name-error">
+            <p class="field-error" id="school-edit-name-error"></p>
+          </div>
+          <div class="field">
+            <label class="field-label" for="school-edit-email">Kontaktinis el. paštas (neprivaloma)</label>
+            <input class="field-control" type="email" id="school-edit-email" maxlength="254" inputmode="email" autocomplete="off" aria-describedby="school-edit-email-error">
+            <p class="field-error" id="school-edit-email-error"></p>
+          </div>
+          <div class="field">
+            <label class="field-label" for="school-edit-ends">Prenumerata galioja iki</label>
+            <input class="field-control" type="date" id="school-edit-ends" aria-describedby="school-edit-ends-error">
+            <p class="field-error" id="school-edit-ends-error"></p>
+          </div>
+          <p class="form-error" id="school-error" role="alert"></p>
+          <div class="account-edit-actions">
+            <button type="submit" class="btn btn-primary" id="school-save">Išsaugoti</button>
+            <button type="button" class="btn btn-ghost" id="school-close">Uždaryti</button>
+          </div>
+          <div class="school-danger">
+            <button type="button" class="btn btn-ghost btn-danger-ghost" id="school-delete">Ištrinti mokyklą</button>
+          </div>
+        </form>
+      </dialog>
+
+      <dialog class="confirm-dialog" id="school-confirm" aria-labelledby="school-confirm-title">
+        <form method="dialog" class="auth-form">
+          <h2 class="account-edit-title" id="school-confirm-title">Ištrinti mokyklą?</h2>
+          <p id="school-confirm-text"></p>
+          <p class="form-error" id="school-confirm-error" role="alert"></p>
+          <div class="account-edit-actions">
+            <button type="button" class="btn btn-danger" id="school-confirm-ok">Ištrinti</button>
+            <button type="submit" class="btn btn-ghost" autofocus>Atšaukti</button>
+          </div>
+        </form>
+      </dialog>
+
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div>
+        <a href="index.html" class="brand">
+          <img src="assets/img/logo-mark.png" alt="" width="30" height="30">
+          Mokify
+        </a>
+        <p class="text-muted mt-4" style="max-width:32ch;">Platforma, kurioje moksleiviai mokosi vieni iš kitų.</p>
+      </div>
+
+      <div class="footer-cols">
+        <h4>Platforma</h4>
+        <ul>
+          <li><a href="apie.html">Apie</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-cols">
+        <h4>Paskyra</h4>
+        <ul>
+          <li><a href="prisijungti.html">Prisijungti</a></li>
+          <li><a href="registracija.html">Registruotis</a></li>
+          <li><a href="pagalba.html">Pagalba</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-cols">
+        <h4>Sekite mus</h4>
+        <div class="social-row">
+          <a href="https://www.tiktok.com/@mokify_lt" target="_blank" rel="noopener noreferrer" aria-label="Mokify TikTok (atsidaro naujame skirtuke)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M16.6 5.82s.51.5 0 0A4.278 4.278 0 0 1 15.54 3h-3.09v12.4a2.592 2.592 0 0 1-2.59 2.5c-1.42 0-2.6-1.16-2.6-2.6 0-1.72 1.66-3.01 3.37-2.48V9.66c-3.45-.46-6.47 2.22-6.47 5.64 0 3.33 2.76 5.7 5.69 5.7 3.14 0 5.69-2.55 5.69-5.7V9.01a7.35 7.35 0 0 0 4.3 1.38V7.3s-1.88.09-3.24-1.48Z"/></svg>
+          </a>
+          <a href="https://www.facebook.com/profile.php?id=61591806752446" target="_blank" rel="noopener noreferrer" aria-label="Mokify Facebook (atsidaro naujame skirtuke)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M13.5 21v-7.5H16l.5-3h-3V8.25c0-.87.24-1.46 1.5-1.46H16.5V4.14C16.24 4.1 15.35 4 14.31 4 12.14 4 10.65 5.32 10.65 7.7v2.8H8.15v3h2.5V21Z"/></svg>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <span>© 2026 Mokify. Visos teisės saugomos.</span>
+      <span>Sukurta Lietuvai 🇱🇹</span>
+    </div>
+  </div>
+</footer>
+
+<script src="assets/js/config.js"></script>
+<script src="assets/js/main.js"></script>
+</body>
+</html>
