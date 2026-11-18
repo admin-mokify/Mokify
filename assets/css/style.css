@@ -365,9 +365,9 @@ h3, .h3 {
 @media (min-width: 1100px) {
   .signed-in .site-header { max-width: 940px; }
 }
-/* Logged out, the menu has only Pagalba: a smaller island, with the link
-   next to the buttons instead of alone in the middle. Widen it again when
-   the Kaip veikia / Mokykloms / Moksleiviams pages are added. */
+/* Logged out, the menu has only Kaip veikia and Pagalba: a smaller island,
+   with the links next to the buttons instead of alone in the middle. Widen
+   it again when the Mokykloms / Moksleiviams pages are added. */
 :root:not(.signed-in) .site-header { max-width: 600px; }
 :root:not(.signed-in) .nav-links { margin-left: auto; }
 
