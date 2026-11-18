@@ -4584,10 +4584,11 @@ const svgEl = (name, attrs = {}) => {
 // Social hours as people write them: 30 -> "0,5", 90 -> "1,5", 60 -> "1".
 const formatHours = (minutes) => String(Math.round((Number(minutes) || 0) / 6) / 10).replace('.', ',');
 
-// The public page that checks a certificate.
+// The public page that checks a certificate: always on the main website,
+// whatever address (a test link, a computer) the page was opened on.
+const SITE_URL = 'https://mokify.net';
 function hoursUrl(code) {
-  const local = /^(localhost|127\.|\[::1\])/.test(window.location.hostname);
-  return `${window.location.origin}/${local ? 'patvirtinimas.html' : 'patvirtinimas'}?k=${encodeURIComponent(code)}`;
+  return `${SITE_URL}/patvirtinimas?k=${encodeURIComponent(code)}`;
 }
 
 // A QR code as an SVG (assets/js/vendor/qrcode.js does the encoding).
