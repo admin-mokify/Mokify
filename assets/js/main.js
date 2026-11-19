@@ -5610,6 +5610,37 @@ async function initLeaderboardToggle(session) {
   });
 }
 
+// paskyra.html: who may start a chat with the student ('teachers': only
+// from the teacher list, as before; 'everyone': anyone can find them by
+// username). Saved as soon as it changes; no database answer yet: hidden.
+async function initMessagePrivacy(session) {
+  const box = document.getElementById('account-privacy');
+  if (!box) return;
+  const res = await callApi('/rest/v1/rpc/my_message_privacy', { body: {}, token: session.access_token });
+  if (!res.ok || !res.data || res.data.ok !== true) return;
+  const radios = [...box.querySelectorAll('input[name="messages-from"]')];
+  let saved = res.data.messages_from === 'everyone' ? 'everyone' : 'teachers';
+  radios.forEach((r) => { r.checked = r.value === saved; });
+  box.hidden = false;
+  const error = document.getElementById('account-error');
+  radios.forEach((radio) => radio.addEventListener('change', async () => {
+    if (!radio.checked) return;
+    radios.forEach((r) => { r.disabled = true; });
+    showBanner(error, '');
+    const current = await getSession();
+    const result = current
+      ? await callApi('/rest/v1/rpc/set_message_privacy', { body: { p_value: radio.value }, token: current.access_token })
+      : { ok: false, status: 0 };
+    radios.forEach((r) => { r.disabled = false; });
+    if (result.ok && result.data && result.data.ok === true) {
+      saved = radio.value;
+    } else {
+      radios.forEach((r) => { r.checked = r.value === saved; });
+      showBanner(error, result.status === 0 ? NETWORK_FAILED_MSG : 'Nepavyko išsaugoti. Pabandyk dar kartą.');
+    }
+  }));
+}
+
 // paskyra.html: the points star beside the name, and for teachers (or anyone
 // who has some) the social hours as a detail line, whose certificates open in
 // a window.
@@ -5624,6 +5655,7 @@ async function initAccountRewards(session, isTeacher) {
     slot.hidden = false;
   }
   initLeaderboardToggle(session);
+  initMessagePrivacy(session);
   const items = hours && Array.isArray(hours.items) ? hours.items : [];
   if (hours && (isTeacher || items.length)) {
     document.getElementById('account-hours').textContent = `${formatHours(hours.minutes)} val.`;
@@ -6204,6 +6236,94 @@ function initChat() {
     renderList();
   };
   document.getElementById('chat-back').addEventListener('click', closeConversation);
+
+  // --- Finding someone by username (supabase/updates/2026-11-29-message-search.sql) ---
+  // Only people you may write to are found: teachers, students who allow
+  // everyone, and anyone who already wrote to you.
+  const sidebar = page.querySelector('.chat-sidebar');
+  const searchInput = document.getElementById('chat-search');
+  const resultsEl = document.getElementById('chat-results');
+  const resultsEmpty = document.getElementById('chat-results-empty');
+  let searchSeq = 0;
+  let searchTimer = 0;
+
+  const endSearch = () => {
+    searchSeq += 1;
+    searchInput.value = '';
+    sidebar.classList.remove('is-searching');
+    resultsEl.hidden = true;
+    resultsEmpty.hidden = true;
+  };
+
+  async function openFound(user) {
+    endSearch();
+    const convo = conversations.find((c) => c.partner_id === user.id);
+    if (convo) {
+      openConversation(partnerFromConvo(convo));
+      return;
+    }
+    const partner = await fetchChatPartner(session, user.id);
+    if (partner) openConversation(partner);
+    else showBanner(resultsEmpty, partner === null ? 'Šiam moksleiviui rašyti negalima.' : 'Nepavyko atidaryti pokalbio. Pabandyk dar kartą.');
+  }
+
+  async function runSearch() {
+    const query = searchInput.value.trim().replace(/^@/, '');
+    const mine = ++searchSeq;
+    if (!query) {
+      endSearch();
+      return;
+    }
+    sidebar.classList.add('is-searching');
+    if (query.length < 2 || !session) {
+      resultsEl.hidden = true;
+      resultsEmpty.textContent = 'Įvesk bent 2 vartotojo vardo raides.';
+      resultsEmpty.hidden = false;
+      return;
+    }
+    const res = await callApi('/rest/v1/rpc/find_users', { body: { p_query: query }, token: session.access_token });
+    if (mine !== searchSeq) return;
+    if (!res.ok || !Array.isArray(res.data)) {
+      resultsEl.hidden = true;
+      resultsEmpty.textContent = res.status === 404 ? 'Paieška dar neįjungta.'
+        : res.status === 0 ? NETWORK_FAILED_MSG : 'Nepavyko ieškoti. Pabandyk dar kartą.';
+      resultsEmpty.hidden = false;
+      return;
+    }
+    resultsEl.replaceChildren(...res.data.map((u) => {
+      const li = document.createElement('li');
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'chat-item';
+      const text = document.createElement('span');
+      text.className = 'chat-item-text';
+      const name = document.createElement('span');
+      name.className = 'chat-item-name';
+      name.textContent = u.full_name;
+      if (u.is_teacher) name.append(' ', textEl('span', 'users-roles', 'Mokytojas'));
+      text.append(name, textEl('span', 'chat-item-user', `@${u.username}`));
+      btn.append(avatarFrame(u.avatar, 44), text);
+      btn.addEventListener('click', () => openFound(u));
+      li.appendChild(btn);
+      return li;
+    }));
+    resultsEl.hidden = !res.data.length;
+    resultsEmpty.textContent = res.data.length ? '' : 'Tokio vartotojo nerasta.';
+    resultsEmpty.hidden = Boolean(res.data.length);
+  }
+
+  searchInput.addEventListener('input', () => {
+    window.clearTimeout(searchTimer);
+    searchTimer = window.setTimeout(runSearch, 250);
+  });
+  document.getElementById('chat-search-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    window.clearTimeout(searchTimer);
+    runSearch();
+  });
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') endSearch();
+  });
 
   // --- The other student's profile (click their name or picture) ---
   const profileDialog = document.getElementById('profile-dialog');

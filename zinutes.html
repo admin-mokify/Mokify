@@ -58,6 +58,12 @@
 
         <div class="chat-sidebar">
           <h1 class="chat-title">Žinutės</h1>
+          <form class="chat-search" id="chat-search-form" role="search" novalidate>
+            <label class="sr-only" for="chat-search">Ieškoti pagal vartotojo vardą</label>
+            <input class="field-control" type="search" id="chat-search" maxlength="21" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Ieškoti pagal vartotojo vardą">
+          </form>
+          <ul class="chat-list chat-results" id="chat-results" aria-label="Paieškos rezultatai" hidden></ul>
+          <p class="chat-results-empty" id="chat-results-empty" role="status" hidden></p>
           <ul class="chat-list" id="chat-list" aria-label="Pokalbiai"></ul>
           <div class="chat-list-empty" id="chat-list-empty" hidden>
             <p id="chat-list-empty-text">Kraunama…</p>
