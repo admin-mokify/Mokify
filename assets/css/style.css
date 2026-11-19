@@ -178,6 +178,14 @@ html::-webkit-scrollbar { width: 0; height: 0; display: none; }
 /* On the right side of the page, for sections that alternate sides (Apie). */
 .section-head--right { margin-left: auto; text-align: right; }
 .section-head--right .lede { margin-left: auto; }
+/* Phones: one column, so everything reads left to right, and a little less
+   space between sections. */
+@media (max-width: 600px) {
+  .section { padding-block: var(--space-7); }
+  .section-head { margin-bottom: var(--space-6); }
+  .section-head--right { text-align: left; }
+  .page-first { padding-top: 120px; }
+}
 /* The first section of a page without a hero: clears the floating header. */
 .page-first { padding-top: clamp(130px, 18vh, 170px); }
 /* A few paragraphs under a heading (Apie). */
@@ -452,6 +460,10 @@ h3, .h3 {
   .nav-account { padding: 3px 16px 3px 3px; }
   .nav-account span { display: inline; }
 }
+.site-header--transparent:not(.is-scrolled) .brand::after {
+  border-color: rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.9);
+}
 .site-header--transparent:not(.is-scrolled) .nav-account {
   border-color: rgba(255, 255, 255, 0.5);
   background: rgba(255, 255, 255, 0.1);
@@ -461,21 +473,27 @@ h3, .h3 {
 .signed-in .nav-cta-group,
 .signed-in .guest-only { display: none !important; }
 
+/* The phone menu opens inside the island itself (one panel, not a card
+   under it), the links separated from the bar by a thin line. */
 .mobile-menu {
   display: none;
   flex-direction: column;
-  gap: var(--space-1);
-  margin-top: var(--space-2);
-  padding: var(--space-4);
-  background: var(--paper-raised);
-  border: 1.5px solid var(--ink-900);
-  border-radius: var(--radius-md);
-  box-shadow: var(--stamp-sm);
+  gap: 2px;
+  margin: 0 var(--space-3);
+  padding: var(--space-2) 0 var(--space-3);
+  border-top: 1px solid rgba(32, 30, 27, 0.12);
 }
 .mobile-menu.is-open { display: flex; }
-.mobile-menu a { padding: var(--space-3); border-radius: var(--radius-sm); font-weight: 600; }
-.mobile-menu a:hover { background: var(--paper); }
+.mobile-menu a { padding: var(--space-3) var(--space-3); border-radius: var(--radius-sm); font-weight: 600; }
+.mobile-menu a:hover,
+.mobile-menu a[aria-current="page"] { background: rgba(32, 30, 27, 0.06); }
 .mobile-menu .btn { margin-top: var(--space-2); }
+.mobile-menu .btn-primary[aria-current="page"] { background: var(--pen-blue); }
+/* Open: nearly solid, so the page doesn't show through the links. */
+.site-header.nav-open { background: rgba(255, 255, 255, 0.97); }
+.site-header--transparent.nav-open:not(.is-scrolled) { background: rgba(20, 22, 28, 0.92); }
+.site-header--transparent.nav-open:not(.is-scrolled) .mobile-menu { border-top-color: rgba(255, 255, 255, 0.18); }
+.site-header--transparent.nav-open:not(.is-scrolled) .mobile-menu a:not(.btn) { color: var(--white); }
 
 @media (min-width: 900px) { .mobile-menu { display: none !important; } }
 
@@ -857,7 +875,10 @@ h3, .h3 {
   text-align: center;
   position: relative;
 }
-.cta-banner h2 { color: var(--white); }
+.cta-banner h2 { color: var(--white); margin-bottom: var(--space-3); }
+@media (max-width: 600px) {
+  .cta-banner { padding: var(--space-7) var(--space-5); }
+}
 .cta-banner .lede { color: rgba(250, 246, 238, 0.75); margin-inline: auto; }
 .cta-banner .btn-primary { background: var(--paper); color: var(--ink-900); border-color: var(--paper); }
 .cta-banner .btn-primary:hover { background: var(--white); }
@@ -871,6 +892,15 @@ h3, .h3 {
 
 .footer-grid { display: grid; gap: var(--space-7); }
 @media (min-width: 768px) { .footer-grid { grid-template-columns: 1.4fr 1fr 1fr 1fr; } }
+/* Phones: the logo and "follow us" on their own rows, the two link lists
+   side by side, so the footer isn't one long column. */
+@media (max-width: 767px) {
+  .site-footer { padding-block: var(--space-7); }
+  .footer-grid { grid-template-columns: 1fr 1fr; gap: var(--space-6) var(--space-4); }
+  .footer-grid > :first-child,
+  .footer-grid > :last-child { grid-column: 1 / -1; }
+  .footer-bottom { margin-top: var(--space-6); }
+}
 
 .footer-cols h4 {
   font-family: var(--font-body);
@@ -1056,6 +1086,12 @@ h3, .h3 {
   padding: var(--space-5);
 }
 @media (min-width: 640px) { .auth-card { padding: var(--space-6); } }
+/* Small phones: a little less padding inside cards, more room for content. */
+@media (max-width: 420px) {
+  .auth-card { padding: var(--space-4); }
+  .account-head { gap: var(--space-4); }
+  .account-head .avatar-frame--lg { width: 88px; height: 88px; }
+}
 
 .auth-form { display: grid; gap: var(--space-5); }
 .auth-form[hidden] { display: none; }
@@ -1419,6 +1455,22 @@ textarea.field-control { min-height: 96px; resize: vertical; line-height: 1.5; }
 .finder-filters { display: grid; gap: var(--space-4); }
 .finder-filters[hidden] { display: none; }
 .finder-subjects { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+/* Phones: the subjects in one row that scrolls sideways (edge to edge), so
+   the teachers start on the first screen instead of after 15 buttons. */
+@media (max-width: 600px) {
+  .finder-subjects {
+    display: flex;
+    gap: var(--space-2);
+    margin-inline: calc(var(--space-5) * -1);
+    padding: 2px var(--space-5) var(--space-2);
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .finder-subjects::-webkit-scrollbar { display: none; }
+  .finder-subjects .subject-option { flex: 0 0 auto; white-space: nowrap; scroll-snap-align: start; scroll-margin-inline: var(--space-5); }
+}
 
 /* School filter: a button that opens a searchable list of schools. */
 .school-filter { display: grid; gap: var(--space-3); justify-items: start; }
@@ -1611,7 +1663,7 @@ textarea.field-control { min-height: 96px; resize: vertical; line-height: 1.5; }
 .chat-item:focus-visible { outline: 2px solid var(--pen-blue); outline-offset: -2px; }
 .chat-item .avatar-frame,
 .chat-thread-head .avatar-frame { width: 44px; height: 44px; box-shadow: none; }
-.chat-item-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.chat-item-text { flex: 1; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; }
 .chat-item-top { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
 .chat-item-name { overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .chat-item-top time { flex-shrink: 0; font-size: 0.8rem; color: var(--text-muted); }
@@ -1981,6 +2033,15 @@ textarea.field-control { min-height: 96px; resize: vertical; line-height: 1.5; }
 .hours-qr svg { width: 100%; height: 100%; display: block; }
 .hours-link { font-size: 0.85rem; overflow-wrap: anywhere; color: var(--pen-blue); }
 #hours-list .users-open[aria-pressed="true"] { background: var(--pen-blue-light); }
+/* The chosen certificate on top; the list of lessons scrolls under it, so the
+   window never gets taller than the screen. */
+#hours-list { max-height: min(300px, 32vh); overflow-y: auto; }
+@media (max-width: 420px) {
+  .confirm-dialog { padding: var(--space-5) var(--space-4); }
+  #hours-list { max-height: 26vh; }
+  .hours-qr { width: 150px; height: 150px; }
+  .hours-cert { padding: var(--space-3); gap: var(--space-2); }
+}
 
 /* Rating a lesson: five stars (radio buttons), lit up to the chosen one. */
 .rating {
@@ -1992,6 +2053,11 @@ textarea.field-control { min-height: 96px; resize: vertical; line-height: 1.5; }
   background: var(--paper-raised);
 }
 .rating-title { font-size: 1.15rem; }
+@media (max-width: 420px) {
+  .rating { padding: var(--space-4); }
+  .reward { padding: var(--space-4); gap: var(--space-3); }
+  .reward-star { width: 56px; height: 56px; }
+}
 .rating-stars {
   display: inline-flex;
   flex-direction: row-reverse;
@@ -2126,6 +2192,16 @@ textarea.field-control { min-height: 96px; resize: vertical; line-height: 1.5; }
   border: 6px solid transparent;
   border-top-color: var(--ink-900);
 }
+/* The side steps open their bubble inwards, so it never sticks out past the
+   screen edge on phones. */
+.lb-step--2 .lb-tip { left: 4px; translate: 0 4px; }
+.lb-step--2 .lb-tip::after { left: 30%; }
+.lb-step--3 .lb-tip { left: auto; right: 4px; translate: 0 4px; }
+.lb-step--3 .lb-tip::after { left: 70%; }
+.lb-step--2 .lb-step-card:hover .lb-tip,
+.lb-step--2 .lb-step-card:focus .lb-tip,
+.lb-step--3 .lb-step-card:hover .lb-tip,
+.lb-step--3 .lb-step-card:focus .lb-tip { opacity: 1; translate: 0 0; }
 .lb-step--empty .lb-step-card:hover .lb-tip,
 .lb-step--empty .lb-step-card:focus .lb-tip { opacity: 1; translate: -50% 0; }
 .lb-step-unknown {
@@ -2433,6 +2509,12 @@ textarea.field-control { min-height: 96px; resize: vertical; line-height: 1.5; }
 .review-tab[aria-selected="true"] { color: var(--ink-900); border-color: var(--ink-900); background: var(--paper-raised); }
 .review-tab:focus-visible { outline: 2px solid var(--pen-blue); outline-offset: 2px; }
 .review-count { font-weight: 500; }
+/* Phones: the three tabs on one row (scrolls sideways if counts make it long). */
+@media (max-width: 600px) {
+  .review-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-inline: var(--space-3); }
+  .review-tabs::-webkit-scrollbar { display: none; }
+  .review-tab { padding: 0.45rem 0.6rem; font-size: 0.92rem; }
+}
 
 .review-item-kind { font-size: 0.85rem; color: var(--text-muted); }
 
