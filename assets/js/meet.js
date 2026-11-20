@@ -750,12 +750,15 @@ function initMeetings() {
 
     // With the whiteboard open it takes the large place, and every picture
     // goes into the row below it.
-    const big = boardOpen ? null : spotTile;
+    // (Same for a video watched together.)
+    const shared = boardOpen || videoOpen;
+    const big = shared ? null : spotTile;
     syncChildren(spotEl, big ? [big.el] : []);
     syncChildren(gridEl, tiles.filter((tile) => tile !== big).map((tile) => tile.el));
     spotEl.hidden = !big;
-    gridEl.classList.toggle('is-strip', Boolean(big) || boardOpen);
+    gridEl.classList.toggle('is-strip', Boolean(big) || shared);
     if (boardEl) boardEl.hidden = !boardOpen;
+    if (videoEl) videoEl.hidden = !videoOpen;
     tiles.forEach((tile) => {
       setToggle(tile.pin, tile === spotTile, 'Sumažinti', 'Padidinti');
       // Alone, the one picture already fills the screen.
@@ -764,7 +767,7 @@ function initMeetings() {
     });
     // (With the board open the invitation would squeeze it; the link stays
     // in the top bar.)
-    inviteEl.hidden = peers.size > 0 || boardOpen;
+    inviteEl.hidden = peers.size > 0 || shared;
     measure();
   }
 
@@ -774,6 +777,10 @@ function initMeetings() {
     if (phase !== 'call') return;
     if (boardOpen) {
       boardResize();
+      return;
+    }
+    if (videoOpen) {
+      videoResize();
       return;
     }
     if (spotTile) {
@@ -2463,6 +2470,7 @@ function initMeetings() {
   // A participant's board channel opened: give them everything on the board.
   function boardSendAll(peer) {
     strokes.forEach((s) => strokeMessages(s).forEach((raw) => boardQueue(peer, raw)));
+    videoSendTo(peer);
   }
 
   function flushDrawing() {
@@ -2584,6 +2592,8 @@ function initMeetings() {
       if (!strokes.size) return;
       clearBoard(false);
       toast(`${peerName(peer)} išvalė lentą.`);
+    } else if (m.t === 'v-load' || m.t === 'v-state' || m.t === 'v-close') {
+      videoSaid(peer, m);
     }
   }
 
@@ -2600,6 +2610,8 @@ function initMeetings() {
 
   function setBoard(open) {
     if (!boardEl) return;
+    // The board and a video share the large place: one at a time.
+    if (open && videoOpen) setVideo(false);
     boardOpen = open;
     setToggle(boardToggle, open, 'Uždaryti lentą', 'Atidaryti lentą');
     if (open) boardNew.hidden = true;
@@ -2680,6 +2692,354 @@ function initMeetings() {
     });
   }
 
+  // --- Watching a YouTube video together --------------------------------------
+  // Anyone in the call may show a video from youtube.com. The website's server
+  // (functions/api/youtube.js) checks its YouTube category first: only
+  // educational ones are allowed. Every page that receives a video checks it
+  // again itself, so a tinkered browser can't push another one. Nothing from
+  // YouTube loads until the student presses "Žiūrėti" (YouTube sees the IP
+  // address of whoever watches). Play, pause and jumping to another moment
+  // are passed on to everyone over the whiteboard's channel.
+  const YT_ORIGIN = 'https://www.youtube-nocookie.com';
+  const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
+  const videoEl = $('call-video');
+  const videoToggle = $('call-video-toggle');
+  const videoNew = $('call-video-new');
+  let videoOpen = false;
+  let video = null; // { id, title, channel, by } — the video on now, if any
+  let videoState = { playing: false, time: 0, at: 0 }; // where it is, for everyone
+  const videoChecks = new Map(); // id -> the server's answer (a promise)
+  const watched = new Set(); // ids this student agreed to load
+  let ytFrame = null;
+  let ytReady = false;
+  let ytState = -1;
+  let ytTime = 0;
+  let ytTimeAt = 0;
+  let quietUntil = 0; // changes made to follow the others aren't passed on
+
+  const VIDEO_ERRORS = {
+    bad_link: 'Įklijuok YouTube vaizdo įrašo nuorodą (youtube.com arba youtu.be).',
+    category: 'Šio vaizdo įrašo rodyti negalima: jis nėra mokomasis.',
+    age: 'Šis vaizdo įrašas skirtas tik suaugusiems.',
+    not_embeddable: 'Šio vaizdo įrašo negalima rodyti kitose svetainėse arba jis privatus.',
+    not_found: 'Tokio vaizdo įrašo YouTube nerasta.',
+    live: 'Tiesioginių transliacijų rodyti negalima.',
+    limit: 'Per daug bandymų. Palauk ir bandyk vėliau.',
+    not_set_up: 'Vaizdo įrašai dar neįjungti.',
+    failed: 'Nepavyko patikrinti vaizdo įrašo. Bandyk dar kartą.',
+  };
+
+  // The video's id from a youtube.com or youtu.be address (same rules as the
+  // server), and where to start (?t=).
+  function parseYoutube(text) {
+    let url;
+    try {
+      url = new URL(String(text).trim());
+    } catch {
+      return null;
+    }
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+    const host = url.hostname.toLowerCase();
+    let id = null;
+    if (host === 'youtu.be') id = url.pathname.split('/')[1];
+    else if (['youtube.com', 'www.youtube.com', 'm.youtube.com'].includes(host)) {
+      if (url.pathname === '/watch') id = url.searchParams.get('v');
+      else {
+        const m = url.pathname.match(/^\/(?:shorts|embed|live)\/([^/]+)/);
+        if (m) id = m[1];
+      }
+    }
+    if (!id || !VIDEO_ID.test(id)) return null;
+    const t = url.searchParams.get('t') || url.searchParams.get('start') || '';
+    const tm = /^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s?)?$/.exec(t);
+    const start = tm ? (Number(tm[1] || 0) * 3600) + (Number(tm[2] || 0) * 60) + Number(tm[3] || 0) : 0;
+    return { id, start: Math.min(start, 86400) };
+  }
+
+  // The server's verdict on a video (asked once per video per page).
+  function checkVideo(id) {
+    if (!videoChecks.has(id)) {
+      const ask = (async () => {
+        try {
+          const current = (await getSession()) || session();
+          const res = await fetch('/api/youtube', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${current ? current.access_token : ''}` },
+            body: JSON.stringify({ code, url: `https://www.youtube.com/watch?v=${id}` }),
+          });
+          if (res.status === 404) return { ok: false, error: 'not_set_up' };
+          const data = await res.json();
+          return data && typeof data.ok === 'boolean' ? data : { ok: false, error: 'failed' };
+        } catch {
+          return { ok: false, error: 'failed' };
+        }
+      })();
+      videoChecks.set(id, ask);
+      // A failed check may be tried again later.
+      ask.then((r) => { if (!r.ok && ['failed', 'limit', 'not_set_up'].includes(r.error)) videoChecks.delete(id); });
+    }
+    return videoChecks.get(id);
+  }
+
+  const videoError = (r) => (r.error === 'category' && r.category
+    ? `Šio vaizdo įrašo rodyti negalima: jo kategorija „${r.category}“. Galima rodyti tik švietimo, mokslo ir technologijų bei patarimų ir mokymų vaizdo įrašus.`
+    : VIDEO_ERRORS[r.error] || VIDEO_ERRORS.failed);
+
+  // Where the video is now for everyone (seconds).
+  const videoNow = () => videoState.time + (videoState.playing ? (Date.now() - videoState.at) / 1000 : 0);
+
+  function ytPost(func, args = []) {
+    if (!ytFrame || !ytFrame.contentWindow) return;
+    ytFrame.contentWindow.postMessage(JSON.stringify({ event: 'command', func, args, id: 1, channel: 'widget' }), YT_ORIGIN);
+  }
+
+  function removePlayer() {
+    if (ytFrame) ytFrame.remove();
+    ytFrame = null;
+    ytReady = false;
+    ytState = -1;
+  }
+
+  function loadPlayer() {
+    if (!video) return;
+    removePlayer();
+    watched.add(video.id);
+    const frame = document.createElement('iframe');
+    frame.title = `YouTube: ${video.title}`;
+    frame.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
+    frame.allowFullscreen = true;
+    frame.referrerPolicy = 'strict-origin-when-cross-origin';
+    frame.src = `${YT_ORIGIN}/embed/${video.id}?enablejsapi=1&playsinline=1&rel=0&start=${Math.floor(videoNow())}&origin=${encodeURIComponent(window.location.origin)}&widgetid=1`;
+    ytFrame = frame;
+    $('video-frame').replaceChildren(frame);
+    // Ask the player to report what it does (YouTube's own embed protocol).
+    let tries = 0;
+    const listen = () => {
+      if (ytFrame !== frame || ytReady || tries > 40) return;
+      tries += 1;
+      frame.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), YT_ORIGIN);
+      window.setTimeout(listen, 250);
+    };
+    frame.addEventListener('load', listen);
+    renderVideo();
+  }
+
+  // Follows the others: jump to their moment, play or pause like them.
+  function followVideo() {
+    if (!ytReady) return;
+    quietUntil = Date.now() + 1500;
+    const target = videoNow();
+    const mine = ytTime + (ytState === 1 ? (Date.now() - ytTimeAt) / 1000 : 0);
+    if (Math.abs(mine - target) > 1.5) ytPost('seekTo', [target, true]);
+    ytPost(videoState.playing ? 'playVideo' : 'pauseVideo');
+  }
+
+  // This student played, paused or jumped: tell everyone.
+  function shareVideoState(playing, time) {
+    if (!video) return;
+    videoState = { playing, time, at: Date.now() };
+    boardSend({ t: 'v-state', id: video.id, playing, time: Math.round(time * 10) / 10 });
+  }
+
+  window.addEventListener('message', (e) => {
+    if (e.origin !== YT_ORIGIN || !ytFrame || e.source !== ytFrame.contentWindow) return;
+    let d;
+    try {
+      d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+    } catch {
+      return;
+    }
+    if (!d || typeof d !== 'object') return;
+    // The player says it can be talked to: start listening to it.
+    if (d.event === 'readyToListen') {
+      ytFrame.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), YT_ORIGIN);
+      return;
+    }
+    if (d.event === 'onReady' || (d.event === 'initialDelivery' && !ytReady)) {
+      if (!ytReady) {
+        ytReady = true;
+        ytPost('addEventListener', ['onStateChange']);
+        followVideo();
+      }
+      return;
+    }
+    const info = d.info;
+    const quiet = Date.now() < quietUntil;
+    if (d.event === 'infoDelivery' && info && typeof info === 'object') {
+      if (typeof info.currentTime === 'number') {
+        const expected = ytTime + (ytState === 1 ? (Date.now() - ytTimeAt) / 1000 : 0);
+        const jumped = ytTimeAt && Math.abs(info.currentTime - expected) > 2;
+        ytTime = info.currentTime;
+        ytTimeAt = Date.now();
+        if (jumped && !quiet && (ytState === 1 || ytState === 2)) shareVideoState(ytState === 1, ytTime);
+      }
+      if (typeof info.playerState === 'number') stateChanged(info.playerState, quiet);
+    } else if (d.event === 'onStateChange' && typeof info === 'number') {
+      stateChanged(info, quiet);
+    }
+  });
+
+  function stateChanged(state, quiet) {
+    if (state === ytState) return;
+    ytState = state;
+    if (quiet) return;
+    // 1 playing, 2 paused (3 loading, 0 ended, 5 ready: nothing to pass on).
+    if (state === 1 && !videoState.playing) shareVideoState(true, ytTime);
+    else if (state === 2 && videoState.playing) shareVideoState(false, ytTime);
+  }
+
+  function renderVideo() {
+    if (!videoEl) return;
+    const loaded = Boolean(ytFrame);
+    $('video-empty').hidden = Boolean(video);
+    $('video-consent').hidden = !video || loaded;
+    $('video-frame').hidden = !loaded;
+    $('video-info').hidden = !video;
+    if (video) {
+      $('video-title').textContent = video.title;
+      $('video-channel').textContent = video.channel ? `· ${video.channel}` : '';
+      $('video-consent-title').textContent = video.title;
+      $('video-consent-text').textContent = `${video.by ? `${video.by} rodo` : 'Rodomas'} vaizdo įrašą${video.channel ? ` iš kanalo „${video.channel}“` : ''}.`;
+    }
+    videoResize();
+  }
+
+  // The player is as large as fits, 16:9.
+  function videoResize() {
+    if (!videoOpen || !videoEl) return;
+    const area = $('video-area');
+    const box = $('video-box');
+    const w = area.clientWidth;
+    const h = area.clientHeight;
+    if (!w || !h) return;
+    const width = Math.max(240, Math.floor(Math.min(w, (h * 16) / 9)));
+    box.style.width = `${width}px`;
+    box.style.height = `${Math.floor((width * 9) / 16)}px`;
+  }
+
+  function setVideo(open) {
+    if (!videoEl) return;
+    videoOpen = open;
+    if (open && boardOpen) {
+      boardOpen = false;
+      setToggle(boardToggle, false, 'Uždaryti lentą', 'Atidaryti lentą');
+      drawing = null;
+    }
+    setToggle(videoToggle, open, 'Uždaryti vaizdo įrašą', 'Žiūrėti vaizdo įrašą kartu');
+    if (open) {
+      videoNew.hidden = true;
+      // Already agreed to this one: straight back in.
+      if (video && !ytFrame && watched.has(video.id)) loadPlayer();
+    } else {
+      removePlayer();
+    }
+    showBanner($('video-error'), '');
+    layout();
+    renderVideo();
+  }
+
+  // A video starts for everyone (shown by this student or another).
+  function startVideo(verdict, by, start) {
+    video = { id: verdict.id, title: verdict.title || 'Vaizdo įrašas', channel: verdict.channel || '', by };
+    videoState = { playing: false, time: start, at: Date.now() };
+    removePlayer();
+    if (!videoOpen) {
+      if (by) {
+        videoNew.hidden = false;
+        toast(`${by} rodo vaizdo įrašą. Atidaryk jį mygtuku apačioje.`);
+      }
+    }
+    renderVideo();
+  }
+
+  function stopVideo(by) {
+    if (!video) return;
+    video = null;
+    videoState = { playing: false, time: 0, at: 0 };
+    removePlayer();
+    if (videoNew) videoNew.hidden = true;
+    if (by) toast(`${by} baigė rodyti vaizdo įrašą.`);
+    renderVideo();
+  }
+
+  // Video messages from another participant (on the whiteboard's channel).
+  async function videoSaid(peer, m) {
+    if (m.t === 'v-load') {
+      if (typeof m.id !== 'string' || !VIDEO_ID.test(m.id)) return;
+      const start = Number.isFinite(m.start) ? Math.min(Math.max(0, m.start), 86400) : 0;
+      const verdict = await checkVideo(m.id);
+      if (!verdict.ok) {
+        if (verdict.error === 'category' || verdict.error === 'age') toast(`${peerName(peer)} bandė parodyti vaizdo įrašą, kurio Mokify neleidžia.`);
+        return;
+      }
+      startVideo(verdict, peerName(peer), start);
+      if (Number.isFinite(m.time) && typeof m.playing === 'boolean') {
+        videoState = { playing: m.playing, time: Math.min(Math.max(0, m.time), 86400), at: Date.now() };
+      }
+    } else if (m.t === 'v-state') {
+      if (!video || m.id !== video.id || typeof m.playing !== 'boolean' || !Number.isFinite(m.time)) return;
+      videoState = { playing: m.playing, time: Math.min(Math.max(0, m.time), 86400), at: Date.now() };
+      followVideo();
+    } else if (m.t === 'v-close') {
+      stopVideo(peerName(peer));
+    }
+  }
+
+  // Someone new connected: tell them about the video that is on.
+  function videoSendTo(peer) {
+    if (!video) return;
+    boardQueue(peer, JSON.stringify({ t: 'v-load', id: video.id, start: 0, playing: videoState.playing, time: Math.round(videoNow() * 10) / 10 }));
+  }
+
+  function resetVideo() {
+    video = null;
+    videoState = { playing: false, time: 0, at: 0 };
+    removePlayer();
+    videoChecks.clear();
+    watched.clear();
+    if (!videoEl) return;
+    videoOpen = false;
+    videoEl.hidden = true;
+    videoNew.hidden = true;
+    setToggle(videoToggle, false, 'Uždaryti vaizdo įrašą', 'Žiūrėti vaizdo įrašą kartu');
+    $('video-link').value = '';
+    renderVideo();
+  }
+
+  if (videoEl) {
+    videoToggle.addEventListener('click', () => setVideo(!videoOpen));
+    $('video-close').addEventListener('click', () => setVideo(false));
+    $('video-watch').addEventListener('click', loadPlayer);
+    $('video-stop').addEventListener('click', () => {
+      if (!video) return;
+      boardSend({ t: 'v-close' });
+      stopVideo(null);
+    });
+    $('video-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errorEl = $('video-error');
+      showBanner(errorEl, '');
+      const parsed = parseYoutube($('video-link').value);
+      if (!parsed) {
+        showBanner(errorEl, VIDEO_ERRORS.bad_link);
+        return;
+      }
+      const button = $('video-show');
+      setBusy(button, true, 'Tikrinama…');
+      const verdict = await checkVideo(parsed.id);
+      setBusy(button, false);
+      if (!verdict.ok) {
+        showBanner(errorEl, videoError(verdict));
+        return;
+      }
+      $('video-link').value = '';
+      startVideo(verdict, null, parsed.start);
+      boardSend({ t: 'v-load', id: verdict.id, start: parsed.start });
+      // Whoever showed it already agreed by pressing the button.
+      loadPlayer();
+    });
+  }
+
   // --- Leaving ---------------------------------------------------------------
 
   const leaveDialog = $('leave-dialog');
@@ -2713,6 +3073,7 @@ function initMeetings() {
     selfTile = null;
     spotTile = null;
     resetBoard();
+    resetVideo();
     knocking = [];
     knocksEl.replaceChildren();
     chatList.replaceChildren();

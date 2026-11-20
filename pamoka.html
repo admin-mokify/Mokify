@@ -162,6 +162,37 @@
                   <canvas class="meet-board-canvas" id="call-board-canvas" role="img" aria-label="Bendra lenta, kurioje gali piešti visi dalyviai"></canvas>
                 </div>
               </div>
+              <div class="meet-video" id="call-video" hidden>
+                <div class="meet-board-tools meet-video-tools">
+                  <form class="meet-video-form" id="video-form" novalidate>
+                    <label class="sr-only" for="video-link">YouTube vaizdo įrašo nuoroda</label>
+                    <input class="field-control" type="url" id="video-link" maxlength="500" autocomplete="off" spellcheck="false" placeholder="Įklijuok YouTube nuorodą">
+                    <button type="submit" class="btn btn-primary btn-sm" id="video-show">Rodyti visiems</button>
+                  </form>
+                  <button type="button" class="meet-board-btn meet-board-close" id="video-close" aria-label="Uždaryti vaizdo įrašą" title="Uždaryti vaizdo įrašą"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+                </div>
+                <p class="form-error" id="video-error" role="alert"></p>
+                <div class="meet-video-area" id="video-area">
+                  <div class="meet-video-box" id="video-box">
+                    <div class="meet-video-message" id="video-empty">
+                      <h3>Žiūrėkite kartu</h3>
+                      <p>Galima rodyti tik mokomuosius YouTube vaizdo įrašus: švietimo, mokslo ir technologijų bei patarimų ir mokymų kategorijų. Sustabdyti ar persukti gali bet kuris dalyvis – tai pasikeis visiems.</p>
+                      <p>Paleidus vaizdo įrašą, YouTube (Google) matys žiūrinčiojo IP adresą.</p>
+                    </div>
+                    <div class="meet-video-message" id="video-consent" hidden>
+                      <h3 id="video-consent-title"></h3>
+                      <p id="video-consent-text"></p>
+                      <p>Paleidus vaizdo įrašą, YouTube (Google) matys tavo IP adresą.</p>
+                      <button type="button" class="btn btn-primary" id="video-watch">Žiūrėti</button>
+                    </div>
+                    <div class="meet-video-frame" id="video-frame" hidden></div>
+                  </div>
+                </div>
+                <div class="meet-video-info" id="video-info" hidden>
+                  <p><strong id="video-title"></strong> <span class="text-muted" id="video-channel"></span></p>
+                  <button type="button" class="btn btn-ghost btn-sm btn-danger-ghost" id="video-stop">Baigti žiūrėti visiems</button>
+                </div>
+              </div>
               <div class="meet-spot" id="call-spot" hidden></div>
               <div class="meet-grid" id="call-grid"></div>
 
@@ -226,6 +257,10 @@
               <button type="button" class="meet-btn meet-btn--toggle" id="call-board-toggle" aria-pressed="false" aria-label="Atidaryti lentą" title="Atidaryti lentą">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M12 17v4"/><path d="M8 21h8"/><path d="m7 13 3-3 2 2 4-4"/></svg>
                 <span class="meet-btn-count meet-btn-dot" id="call-board-new" hidden></span>
+              </button>
+              <button type="button" class="meet-btn meet-btn--toggle" id="call-video-toggle" aria-pressed="false" aria-label="Žiūrėti vaizdo įrašą kartu" title="Žiūrėti vaizdo įrašą kartu">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="16" x="2" y="4" rx="3"/><path d="m10 9 5 3-5 3z"/></svg>
+                <span class="meet-btn-count meet-btn-dot" id="call-video-new" hidden></span>
               </button>
               <button type="button" class="meet-btn meet-btn--toggle" id="call-chat-toggle" aria-pressed="false" aria-label="Pokalbis" title="Pokalbis" aria-controls="call-panel">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>

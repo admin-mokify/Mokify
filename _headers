@@ -34,18 +34,28 @@
 # microphone and screen sharing. On every other page they stay switched off
 # for any script.
 # ("! Name" takes back the site-wide line above, so the two don't add up.)
+# They may also show YouTube's privacy-enhanced player (youtube-nocookie.com)
+# for videos watched together; every other page embeds nothing.
 /pamoka
   ! Permissions-Policy
   Permissions-Policy: camera=(self), microphone=(self), display-capture=(self), geolocation=(), payment=(), usb=()
+  ! Content-Security-Policy
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-dNdlBplWR5bDZDI+YCKolkPPL27/gS/a7SNuPT2Lg0A=' 'sha256-gNErPQNFHnPV6E21y/i1vcerqZ7iQcV1hk/wL8290Iw=' 'sha256-aTe+duQfxwseG47G0/v3OGxdlnVvpR8CJ892EWSSVUE=' 'sha256-DxZ8bphmntGBWUwZoi4Mcw5nF0glV0/n88AvjVS1kXc=' 'sha256-coQpCj39+gsPChai8I7wuQVJtQ+rMlLIHy81Ncooiy4=' 'sha256-kJVYAtI8BxNsALvkC9bdj4OoEnwsUO8QrNIfhQeZ45I=' 'sha256-T8BLNf9ajZBFEcnas/0Q1vjc+GdSOS/A5KRMtr50ZYY=' 'sha256-v5kauUFJsqYzGc06dZiNRCwgHLpzD8ARZwtCJl/X31c=' 'sha256-YGTZK1M33rHx4rEFJIyJIW4LdQjPxIpYuGlg4S2Jgfw=' 'sha256-zGcEF7EoyNFw11TxfLxI1mGtIGXTWc9R1dDLy8nFI54=' 'sha256-7fePCJGlNpS+LQMomwhPU1vi7MTmn7lEkRZYSBupXKs='; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'self' https://wswryravelakztdkiysq.supabase.co wss://wswryravelakztdkiysq.supabase.co; object-src 'none'; frame-src https://www.youtube-nocookie.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests
 /pamoka.html
   ! Permissions-Policy
   Permissions-Policy: camera=(self), microphone=(self), display-capture=(self), geolocation=(), payment=(), usb=()
+  ! Content-Security-Policy
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-dNdlBplWR5bDZDI+YCKolkPPL27/gS/a7SNuPT2Lg0A=' 'sha256-gNErPQNFHnPV6E21y/i1vcerqZ7iQcV1hk/wL8290Iw=' 'sha256-aTe+duQfxwseG47G0/v3OGxdlnVvpR8CJ892EWSSVUE=' 'sha256-DxZ8bphmntGBWUwZoi4Mcw5nF0glV0/n88AvjVS1kXc=' 'sha256-coQpCj39+gsPChai8I7wuQVJtQ+rMlLIHy81Ncooiy4=' 'sha256-kJVYAtI8BxNsALvkC9bdj4OoEnwsUO8QrNIfhQeZ45I=' 'sha256-T8BLNf9ajZBFEcnas/0Q1vjc+GdSOS/A5KRMtr50ZYY=' 'sha256-v5kauUFJsqYzGc06dZiNRCwgHLpzD8ARZwtCJl/X31c=' 'sha256-YGTZK1M33rHx4rEFJIyJIW4LdQjPxIpYuGlg4S2Jgfw=' 'sha256-zGcEF7EoyNFw11TxfLxI1mGtIGXTWc9R1dDLy8nFI54=' 'sha256-7fePCJGlNpS+LQMomwhPU1vi7MTmn7lEkRZYSBupXKs='; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'self' https://wswryravelakztdkiysq.supabase.co wss://wswryravelakztdkiysq.supabase.co; object-src 'none'; frame-src https://www.youtube-nocookie.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests
 /susitikimai
   ! Permissions-Policy
   Permissions-Policy: camera=(self), microphone=(self), display-capture=(self), geolocation=(), payment=(), usb=()
+  ! Content-Security-Policy
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-dNdlBplWR5bDZDI+YCKolkPPL27/gS/a7SNuPT2Lg0A=' 'sha256-gNErPQNFHnPV6E21y/i1vcerqZ7iQcV1hk/wL8290Iw=' 'sha256-aTe+duQfxwseG47G0/v3OGxdlnVvpR8CJ892EWSSVUE=' 'sha256-DxZ8bphmntGBWUwZoi4Mcw5nF0glV0/n88AvjVS1kXc=' 'sha256-coQpCj39+gsPChai8I7wuQVJtQ+rMlLIHy81Ncooiy4=' 'sha256-kJVYAtI8BxNsALvkC9bdj4OoEnwsUO8QrNIfhQeZ45I=' 'sha256-T8BLNf9ajZBFEcnas/0Q1vjc+GdSOS/A5KRMtr50ZYY=' 'sha256-v5kauUFJsqYzGc06dZiNRCwgHLpzD8ARZwtCJl/X31c=' 'sha256-YGTZK1M33rHx4rEFJIyJIW4LdQjPxIpYuGlg4S2Jgfw=' 'sha256-zGcEF7EoyNFw11TxfLxI1mGtIGXTWc9R1dDLy8nFI54=' 'sha256-7fePCJGlNpS+LQMomwhPU1vi7MTmn7lEkRZYSBupXKs='; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'self' https://wswryravelakztdkiysq.supabase.co wss://wswryravelakztdkiysq.supabase.co; object-src 'none'; frame-src https://www.youtube-nocookie.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests
 /susitikimai.html
   ! Permissions-Policy
   Permissions-Policy: camera=(self), microphone=(self), display-capture=(self), geolocation=(), payment=(), usb=()
+  ! Content-Security-Policy
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-dNdlBplWR5bDZDI+YCKolkPPL27/gS/a7SNuPT2Lg0A=' 'sha256-gNErPQNFHnPV6E21y/i1vcerqZ7iQcV1hk/wL8290Iw=' 'sha256-aTe+duQfxwseG47G0/v3OGxdlnVvpR8CJ892EWSSVUE=' 'sha256-DxZ8bphmntGBWUwZoi4Mcw5nF0glV0/n88AvjVS1kXc=' 'sha256-coQpCj39+gsPChai8I7wuQVJtQ+rMlLIHy81Ncooiy4=' 'sha256-kJVYAtI8BxNsALvkC9bdj4OoEnwsUO8QrNIfhQeZ45I=' 'sha256-T8BLNf9ajZBFEcnas/0Q1vjc+GdSOS/A5KRMtr50ZYY=' 'sha256-v5kauUFJsqYzGc06dZiNRCwgHLpzD8ARZwtCJl/X31c=' 'sha256-YGTZK1M33rHx4rEFJIyJIW4LdQjPxIpYuGlg4S2Jgfw=' 'sha256-zGcEF7EoyNFw11TxfLxI1mGtIGXTWc9R1dDLy8nFI54=' 'sha256-7fePCJGlNpS+LQMomwhPU1vi7MTmn7lEkRZYSBupXKs='; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'self' https://wswryravelakztdkiysq.supabase.co wss://wswryravelakztdkiysq.supabase.co; object-src 'none'; frame-src https://www.youtube-nocookie.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests
 
 # The document review page shows uploaded PDFs inside the page, which needs
 # frame-src blob: (a file it downloaded itself); everything else as above.
