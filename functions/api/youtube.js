@@ -178,9 +178,18 @@ export async function onRequestPost({ request, env }) {
   return json(verdict);
 }
 
-// Whether the key is set up (nothing else).
-export function onRequestGet({ env }) {
-  return json({ videos: Boolean(env.YOUTUBE_API_KEY) });
+// Whether the key is set up and YouTube accepts it, tested on one fixed public
+// video (YouTube's own developer demo). Its answer is remembered for a day like
+// any other, so asking here costs nothing more.
+const SELF_TEST_VIDEO = 'M7lc1UVf-VE';
+export async function onRequestGet({ env }) {
+  if (!env.YOUTUBE_API_KEY) return json({ videos: false });
+  const verdict = await judge(SELF_TEST_VIDEO, env);
+  return json({
+    videos: true,
+    keyWorks: Boolean(verdict),
+    testVideo: verdict ? (verdict.ok ? 'allowed' : `refused (${verdict.error}${verdict.category ? `: ${verdict.category}` : ''})`) : null,
+  });
 }
 
 export function onRequest() {
