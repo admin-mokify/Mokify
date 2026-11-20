@@ -2814,6 +2814,24 @@ textarea.field-control { min-height: 96px; resize: vertical; line-height: 1.5; }
 
 .meet-done { display: grid; gap: var(--space-5); max-width: 560px; margin-inline: auto; }
 .meet-done p { line-height: 1.55; }
+/* The end of a finished lesson on wider screens: everything side by side so
+   it fits without scrolling. Points and social hours on the left, the
+   certificate in the middle, the rating on the right (a student without
+   social hours: points left, rating right). */
+.meet-done.has-rewards { max-width: 1100px; gap: var(--space-4); }
+@media (min-width: 900px) { .meet-done.has-rewards { padding-block: var(--space-5); } }
+@media (min-width: 900px) {
+  .rewards--lesson { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.15fr); grid-template-rows: auto 1fr; align-items: start; }
+  .rewards--lesson > .reward { grid-column: 1; }
+  .rewards--lesson > .hours-cert { grid-column: 2; grid-row: 1 / span 2; }
+  .rewards--lesson > .rating { grid-column: 3; grid-row: 1 / span 2; }
+  .rewards--lesson:not(:has(> .hours-cert)) { grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); }
+  .rewards--lesson:not(:has(> .hours-cert)) > .rating { grid-column: 2; }
+  .rewards--lesson .hours-qr { width: 150px; height: 150px; }
+  .rewards--lesson .reward-value { font-size: clamp(2.2rem, 2vw + 1.4rem, 3rem); }
+  .rewards--lesson .reward-star { width: 60px; height: 60px; }
+  .rewards--lesson .rating textarea.field-control { min-height: 72px; }
+}
 
 /* --- The call: fills the window; the site's menu and footer step aside --- */
 

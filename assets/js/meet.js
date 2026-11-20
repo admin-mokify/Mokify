@@ -2359,6 +2359,8 @@ function initMeetings() {
         if (ending.rewards) renderLessonRewards(rewards, ending.rewards);
         else rewards.hidden = true;
       }
+      // With rewards the last screen spreads out across the page (style.css).
+      screens.done.classList.toggle('has-rewards', Boolean(rewards && !rewards.hidden));
       doneRejoin.hidden = !ending.rejoin;
       setPhase('done');
       $('done-title').focus();
