@@ -2871,6 +2871,77 @@ textarea.field-control { min-height: 96px; resize: vertical; line-height: 1.5; }
 .meet-btn-count[hidden] { display: none; }
 /* Unread chat messages are news; the number of participants is just a number. */
 #call-chat-count { background: var(--pen-red); }
+/* Someone drew on the whiteboard while it was closed: a small red dot. */
+.meet-btn-dot { min-width: 14px; width: 14px; height: 14px; top: -6px; right: -6px; padding: 0; background: var(--pen-red); border: 2px solid var(--paper-raised); }
+
+/* --- The whiteboard: takes the large place in the call, pictures in a row
+   below. The sheet keeps the same shape (16:10) on every screen. --- */
+.meet-board { display: flex; flex: 1; flex-direction: column; gap: var(--space-3); min-height: 0; }
+.meet-board[hidden] { display: none; }
+.meet-board-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  background: var(--paper-raised);
+  border: 1.5px solid var(--ink-900);
+  border-radius: var(--radius-md);
+  box-shadow: var(--stamp-sm);
+}
+.meet-board-group { display: flex; align-items: center; gap: var(--space-1); }
+.meet-board-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  background: none;
+  border: 1.5px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--ink-900);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.meet-board-btn:hover { background: rgba(32, 30, 27, 0.06); }
+.meet-board-btn[aria-pressed="true"] { border-color: var(--ink-900); background: var(--highlighter); }
+.meet-board-btn:focus-visible, .meet-board-color:focus-visible { outline: 3px solid var(--pen-blue); outline-offset: 2px; }
+.meet-board-close { margin-left: auto; }
+.meet-board-color {
+  width: 28px;
+  height: 28px;
+  margin: 0 2px;
+  padding: 0;
+  border: 2px solid var(--paper-raised);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1.5px rgba(32, 30, 27, 0.35);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.meet-board-color[data-color="0"] { background: #201E1B; }
+.meet-board-color[data-color="1"] { background: #2B4C8C; }
+.meet-board-color[data-color="2"] { background: #C0392B; }
+.meet-board-color[data-color="3"] { background: #2E7D4F; }
+.meet-board-color[aria-pressed="true"] { box-shadow: 0 0 0 2.5px var(--ink-900); }
+.meet-board-dot { display: block; border-radius: 50%; background: var(--ink-900); }
+.meet-board-dot.is-thin { width: 5px; height: 5px; }
+.meet-board-dot.is-thick { width: 12px; height: 12px; }
+.meet-board-area { display: grid; flex: 1; place-items: center; min-height: 0; }
+.meet-board-canvas {
+  display: block;
+  background: #FFFFFF;
+  border: 1.5px solid var(--ink-900);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--stamp-sm);
+  touch-action: none;
+  cursor: crosshair;
+}
+.meet-board-canvas.is-erasing { cursor: cell; }
+@media (max-width: 600px) {
+  .meet-board-tools { gap: var(--space-1) var(--space-2); padding: var(--space-1) var(--space-2); }
+  .meet-board-btn { width: 34px; height: 34px; }
+  .meet-board-color { width: 24px; height: 24px; }
+}
 
 /* --- Before coming in --- */
 

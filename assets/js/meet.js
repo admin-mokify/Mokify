@@ -748,17 +748,23 @@ function initMeetings() {
     tiles.push(selfTile);
     if (spotTile && !tiles.includes(spotTile)) spotTile = null;
 
-    syncChildren(spotEl, spotTile ? [spotTile.el] : []);
-    syncChildren(gridEl, tiles.filter((tile) => tile !== spotTile).map((tile) => tile.el));
-    spotEl.hidden = !spotTile;
-    gridEl.classList.toggle('is-strip', Boolean(spotTile));
+    // With the whiteboard open it takes the large place, and every picture
+    // goes into the row below it.
+    const big = boardOpen ? null : spotTile;
+    syncChildren(spotEl, big ? [big.el] : []);
+    syncChildren(gridEl, tiles.filter((tile) => tile !== big).map((tile) => tile.el));
+    spotEl.hidden = !big;
+    gridEl.classList.toggle('is-strip', Boolean(big) || boardOpen);
+    if (boardEl) boardEl.hidden = !boardOpen;
     tiles.forEach((tile) => {
       setToggle(tile.pin, tile === spotTile, 'Sumažinti', 'Padidinti');
       // Alone, the one picture already fills the screen.
       tile.pin.hidden = tiles.length < 2;
       if (!tile.video.hidden) tile.video.play().catch(() => {});
     });
-    inviteEl.hidden = peers.size > 0;
+    // (With the board open the invitation would squeeze it; the link stays
+    // in the top bar.)
+    inviteEl.hidden = peers.size > 0 || boardOpen;
     measure();
   }
 
@@ -766,6 +772,10 @@ function initMeetings() {
   // wide screen; on an upright phone screen squarer ones use the room better.
   function measure() {
     if (phase !== 'call') return;
+    if (boardOpen) {
+      boardResize();
+      return;
+    }
     if (spotTile) {
       const width = Math.min(spotEl.clientWidth - 10, (spotEl.clientHeight - 10) * (16 / 9));
       spotEl.style.setProperty('--spot-w', `${Math.max(160, Math.floor(width))}px`);
@@ -1516,9 +1526,22 @@ function initMeetings() {
   function closeConnection(peer) {
     window.clearTimeout(peer.timer);
     peer.timer = null;
-    const { pc, channel } = peer;
+    const { pc, channel, board } = peer;
     peer.pc = null;
     peer.channel = null;
+    peer.board = null;
+    window.clearTimeout(peer.boardPump);
+    peer.boardPump = 0;
+    peer.boardOut = [];
+    if (board) {
+      board.onopen = null;
+      board.onmessage = null;
+      try {
+        board.close();
+      } catch {
+        // Already closed.
+      }
+    }
     peer.remoteSet = false;
     peer.candidates = [];
     if (channel) {
@@ -1567,6 +1590,13 @@ function initMeetings() {
     peer.channel = channel;
     channel.onopen = () => sendState(peer);
     channel.onmessage = (e) => peerSaid(peer, e.data);
+    // The whiteboard's own channel (1), so drawing never gets in the way of
+    // the call's messages; when it opens, the newcomer gets the whole board.
+    const board = pc.createDataChannel('board', { negotiated: true, id: 1 });
+    peer.board = board;
+    peer.boardOut = [];
+    board.onopen = () => boardSendAll(peer);
+    board.onmessage = (e) => boardSaid(peer, e.data);
     pc.onicecandidate = (e) => {
       if (e.candidate && peer.pc === pc) queueSignal(peer, 'ice', { sid, c: e.candidate.toJSON() });
     };
@@ -2298,6 +2328,387 @@ function initMeetings() {
   $('report-cancel').addEventListener('click', () => reportDialog.close());
   $('report-close').addEventListener('click', () => reportDialog.close());
 
+  // --- Whiteboard ------------------------------------------------------------
+  // A shared board for explaining things. Everyone in the call draws on the
+  // same 1600×1000 sheet, shown in the same shape on every screen, so a
+  // drawing lands in the same place for all. Lines travel directly between the
+  // browsers over their own channel (id 1, next to the call's channel 0),
+  // never through a server, and are gone when the meeting ends. Whoever comes
+  // in later gets the whole board from the others.
+  const BOARD_W = 1600;
+  const BOARD_H = 1000;
+  const BOARD_COLORS = ['#201E1B', '#2B4C8C', '#C0392B', '#2E7D4F'];
+  const BOARD_SIZES = [3, 9];
+  const BOARD_MAX_STROKES = 3000;
+  const BOARD_MAX_NUMBERS = 8000; // 4000 points per line
+  const BOARD_CHUNK = 600; // numbers per message
+  const boardEl = $('call-board');
+  const boardToggle = $('call-board-toggle');
+  const boardNew = $('call-board-new');
+  const boardArea = $('call-board-area');
+  const boardCanvas = $('call-board-canvas');
+  const boardCtx = boardCanvas ? boardCanvas.getContext('2d') : null;
+  const strokes = new Map(); // id -> { id, mine, c, w, p: [x, y, x, y, ...] }
+  let myStrokes = []; // my own line ids, newest last (for "undo")
+  let boardOpen = false;
+  let boardTool = 'pen';
+  let boardColor = 0;
+  let boardSize = 0;
+  let drawing = null; // my line being drawn: { stroke, sent, pending }
+  let flushTimer = 0;
+  let boardScale = 1; // screen pixels per board unit
+  let boardNoticed = false;
+
+  const newStrokeId = () => Math.random().toString(36).slice(2, 12).padEnd(10, '0');
+  const validPoints = (p) => Array.isArray(p) && p.length % 2 === 0 && p.length <= BOARD_MAX_NUMBERS
+    && p.every((n) => Number.isInteger(n) && n >= -50 && n <= BOARD_W + 50);
+  const validId = (id) => typeof id === 'string' && /^[a-z0-9]{6,16}$/.test(id);
+
+  function boardResize() {
+    if (!boardOpen || !boardCtx) return;
+    const w = boardArea.clientWidth;
+    const h = boardArea.clientHeight;
+    if (!w || !h) return;
+    const cssW = Math.max(200, Math.floor(Math.min(w, (h * BOARD_W) / BOARD_H)));
+    const cssH = Math.floor((cssW * BOARD_H) / BOARD_W);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    boardCanvas.style.width = `${cssW}px`;
+    boardCanvas.style.height = `${cssH}px`;
+    boardCanvas.width = Math.round(cssW * dpr);
+    boardCanvas.height = Math.round(cssH * dpr);
+    boardScale = cssW / BOARD_W;
+    redrawBoard();
+  }
+
+  function drawStroke(ctx, s, from = 0) {
+    const p = s.p;
+    if (p.length < 2) return;
+    ctx.strokeStyle = BOARD_COLORS[s.c];
+    ctx.lineWidth = BOARD_SIZES[s.w];
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    const start = Math.max(0, from - 2);
+    ctx.moveTo(p[start], p[start + 1]);
+    if (p.length === 2) ctx.lineTo(p[0] + 0.01, p[1]); // a dot
+    for (let i = start + 2; i < p.length; i += 2) ctx.lineTo(p[i], p[i + 1]);
+    ctx.stroke();
+  }
+
+  function useBoardScale() {
+    const dpr = boardCanvas.width / (BOARD_W * boardScale);
+    boardCtx.setTransform(dpr * boardScale, 0, 0, dpr * boardScale, 0, 0);
+  }
+
+  function redrawBoard() {
+    if (!boardOpen || !boardCtx) return;
+    boardCtx.setTransform(1, 0, 0, 1, 0, 0);
+    boardCtx.fillStyle = '#FFFFFF';
+    boardCtx.fillRect(0, 0, boardCanvas.width, boardCanvas.height);
+    useBoardScale();
+    strokes.forEach((s) => drawStroke(boardCtx, s));
+  }
+
+  // Draws only the newest piece of a line (cheaper than drawing everything).
+  function drawTail(s, from) {
+    if (!boardOpen || !boardCtx) return;
+    useBoardScale();
+    drawStroke(boardCtx, s, from);
+  }
+
+  // Sends to everyone (or one participant), in order, a little at a time so a
+  // big board doesn't flood the connection.
+  function boardQueue(peer, raw) {
+    if (!peer.board || peer.board.readyState !== 'open') return;
+    peer.boardOut = peer.boardOut || [];
+    peer.boardOut.push(raw);
+    if (!peer.boardPump) {
+      const pump = () => {
+        const next = peer.boardOut && peer.boardOut.shift();
+        if (!next || !peer.board || peer.board.readyState !== 'open') {
+          peer.boardPump = 0;
+          peer.boardOut = [];
+          return;
+        }
+        try {
+          peer.board.send(next);
+        } catch {
+          // The channel is closing.
+        }
+        peer.boardPump = peer.boardOut.length ? window.setTimeout(pump, 12) : 0;
+      };
+      peer.boardPump = window.setTimeout(pump, 0);
+    }
+  }
+  const boardSend = (message) => {
+    const raw = JSON.stringify(message);
+    peers.forEach((peer) => boardQueue(peer, raw));
+  };
+
+  // A line in messages: its start, then more points in pieces.
+  function strokeMessages(s) {
+    const out = [JSON.stringify({ t: 's', id: s.id, c: s.c, w: s.w, p: s.p.slice(0, BOARD_CHUNK) })];
+    for (let i = BOARD_CHUNK; i < s.p.length; i += BOARD_CHUNK) {
+      out.push(JSON.stringify({ t: 'a', id: s.id, p: s.p.slice(i, i + BOARD_CHUNK) }));
+    }
+    return out;
+  }
+
+  // A participant's board channel opened: give them everything on the board.
+  function boardSendAll(peer) {
+    strokes.forEach((s) => strokeMessages(s).forEach((raw) => boardQueue(peer, raw)));
+  }
+
+  function flushDrawing() {
+    window.clearTimeout(flushTimer);
+    flushTimer = 0;
+    if (!drawing || !drawing.pending.length) return;
+    const s = drawing.stroke;
+    while (drawing.pending.length) {
+      const part = drawing.pending.splice(0, BOARD_CHUNK);
+      boardSend(drawing.sent ? { t: 'a', id: s.id, p: part } : { t: 's', id: s.id, c: s.c, w: s.w, p: part });
+      drawing.sent = true;
+    }
+  }
+  const scheduleFlush = () => {
+    if (!flushTimer) flushTimer = window.setTimeout(flushDrawing, 40);
+  };
+
+  function boardPoint(e) {
+    const rect = boardCanvas.getBoundingClientRect();
+    return [
+      Math.round(Math.min(BOARD_W, Math.max(0, (e.clientX - rect.left) / boardScale))),
+      Math.round(Math.min(BOARD_H, Math.max(0, (e.clientY - rect.top) / boardScale))),
+    ];
+  }
+
+  // Distance from point (px, py) to the segment a–b.
+  function segmentDistance(px, py, ax, ay, bx, by) {
+    const dx = bx - ax;
+    const dy = by - ay;
+    const len = dx * dx + dy * dy;
+    const t = len ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len)) : 0;
+    return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+  }
+
+  // The eraser takes away whole lines it touches, for everyone.
+  function eraseAt(x, y) {
+    const hit = [];
+    strokes.forEach((s) => {
+      const reach = 14 + BOARD_SIZES[s.w] / 2;
+      const p = s.p;
+      for (let i = 0; i < p.length; i += 2) {
+        const bx = i + 2 < p.length ? p[i + 2] : p[i];
+        const by = i + 2 < p.length ? p[i + 3] : p[i + 1];
+        if (segmentDistance(x, y, p[i], p[i + 1], bx, by) <= reach) {
+          hit.push(s.id);
+          break;
+        }
+      }
+    });
+    if (hit.length) removeStrokes(hit, true);
+  }
+
+  function removeStrokes(ids, tell) {
+    ids.forEach((id) => strokes.delete(id));
+    myStrokes = myStrokes.filter((id) => strokes.has(id));
+    redrawBoard();
+    if (tell) boardSend({ t: 'x', ids });
+  }
+
+  function clearBoard(tell) {
+    strokes.clear();
+    myStrokes = [];
+    drawing = null;
+    redrawBoard();
+    if (tell) boardSend({ t: 'clear' });
+  }
+
+  if (boardCanvas) {
+    boardCanvas.addEventListener('pointerdown', (e) => {
+      if (!boardOpen || e.button !== 0) return;
+      e.preventDefault();
+      try {
+        boardCanvas.setPointerCapture(e.pointerId);
+      } catch {
+        // The pointer is already gone; drawing still works without it.
+      }
+      const [x, y] = boardPoint(e);
+      if (boardTool === 'eraser') {
+        drawing = { erasing: true };
+        eraseAt(x, y);
+        return;
+      }
+      if (strokes.size >= BOARD_MAX_STROKES) {
+        toast('Lenta pilna. Išvalyk ją, kad galėtum piešti toliau.');
+        return;
+      }
+      const stroke = { id: newStrokeId(), mine: true, c: boardColor, w: boardSize, p: [x, y] };
+      strokes.set(stroke.id, stroke);
+      myStrokes.push(stroke.id);
+      drawing = { stroke, sent: false, pending: [x, y] };
+      drawTail(stroke, 0);
+      scheduleFlush();
+    });
+    boardCanvas.addEventListener('pointermove', (e) => {
+      if (!drawing) return;
+      const events = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : [e];
+      (events.length ? events : [e]).forEach((ev) => {
+        const [x, y] = boardPoint(ev);
+        if (drawing.erasing) {
+          eraseAt(x, y);
+          return;
+        }
+        const p = drawing.stroke.p;
+        if (Math.hypot(x - p[p.length - 2], y - p[p.length - 1]) < 2 || p.length >= BOARD_MAX_NUMBERS) return;
+        p.push(x, y);
+        drawing.pending.push(x, y);
+        drawTail(drawing.stroke, p.length - 2);
+      });
+      scheduleFlush();
+    });
+    const endLine = () => {
+      if (!drawing) return;
+      if (!drawing.erasing) flushDrawing();
+      drawing = null;
+    };
+    boardCanvas.addEventListener('pointerup', endLine);
+    boardCanvas.addEventListener('pointercancel', endLine);
+  }
+
+  // A message from another participant's board.
+  function boardSaid(peer, raw) {
+    if (typeof raw !== 'string' || raw.length > 20000) return;
+    const second = Math.floor(Date.now() / 1000);
+    if (peer.boardAt !== second) {
+      peer.boardAt = second;
+      peer.boardCount = 0;
+    }
+    peer.boardCount += 1;
+    if (peer.boardCount > 150) return;
+    let m;
+    try {
+      m = JSON.parse(raw);
+    } catch {
+      return;
+    }
+    if (!m || typeof m !== 'object') return;
+    if (m.t === 's') {
+      if (!validId(m.id) || ![0, 1, 2, 3].includes(m.c) || ![0, 1].includes(m.w) || !validPoints(m.p) || !m.p.length) return;
+      if (strokes.has(m.id) || strokes.size >= BOARD_MAX_STROKES) return;
+      const s = { id: m.id, mine: false, c: m.c, w: m.w, p: m.p.slice() };
+      strokes.set(s.id, s);
+      drawTail(s, 0);
+      boardActivity(peer);
+    } else if (m.t === 'a') {
+      const s = validId(m.id) && strokes.get(m.id);
+      if (!s || s.mine || !validPoints(m.p) || s.p.length + m.p.length > BOARD_MAX_NUMBERS) return;
+      const from = s.p.length;
+      s.p.push(...m.p);
+      drawTail(s, from);
+    } else if (m.t === 'x') {
+      if (!Array.isArray(m.ids) || m.ids.length > 500) return;
+      removeStrokes(m.ids.filter(validId), false);
+    } else if (m.t === 'clear') {
+      if (!strokes.size) return;
+      clearBoard(false);
+      toast(`${peerName(peer)} išvalė lentą.`);
+    }
+  }
+
+  // Someone drew while this board is closed: a dot on the button, and once a
+  // short note.
+  function boardActivity(peer) {
+    if (boardOpen || !boardNew) return;
+    boardNew.hidden = false;
+    if (!boardNoticed) {
+      boardNoticed = true;
+      toast(`${peerName(peer)} piešia lentoje. Atidaryk ją mygtuku apačioje.`);
+    }
+  }
+
+  function setBoard(open) {
+    if (!boardEl) return;
+    boardOpen = open;
+    setToggle(boardToggle, open, 'Uždaryti lentą', 'Atidaryti lentą');
+    if (open) boardNew.hidden = true;
+    if (!open) drawing = null;
+    layout();
+  }
+
+  function resetBoard() {
+    clearBoard(false);
+    boardNoticed = false;
+    if (!boardEl) return;
+    boardOpen = false;
+    boardEl.hidden = true;
+    boardNew.hidden = true;
+    setToggle(boardToggle, false, 'Uždaryti lentą', 'Atidaryti lentą');
+  }
+
+  if (boardEl) {
+    boardToggle.addEventListener('click', () => setBoard(!boardOpen));
+    $('board-close').addEventListener('click', () => setBoard(false));
+    const pressOnly = (buttons, chosen) => buttons.forEach((b) => b.setAttribute('aria-pressed', String(b === chosen)));
+    const toolButtons = [...boardEl.querySelectorAll('[data-tool]')];
+    const colorButtons = [...boardEl.querySelectorAll('[data-color]')];
+    const sizeButtons = [...boardEl.querySelectorAll('[data-size]')];
+    const choosePen = () => {
+      boardTool = 'pen';
+      pressOnly(toolButtons, toolButtons.find((b) => b.dataset.tool === 'pen'));
+      boardCanvas.classList.remove('is-erasing');
+    };
+    toolButtons.forEach((b) => b.addEventListener('click', () => {
+      boardTool = b.dataset.tool;
+      pressOnly(toolButtons, b);
+      boardCanvas.classList.toggle('is-erasing', boardTool === 'eraser');
+    }));
+    colorButtons.forEach((b) => b.addEventListener('click', () => {
+      boardColor = Number(b.dataset.color);
+      pressOnly(colorButtons, b);
+      choosePen();
+    }));
+    sizeButtons.forEach((b) => b.addEventListener('click', () => {
+      boardSize = Number(b.dataset.size);
+      pressOnly(sizeButtons, b);
+      choosePen();
+    }));
+    $('board-undo').addEventListener('click', () => {
+      const id = myStrokes[myStrokes.length - 1];
+      if (id) removeStrokes([id], true);
+    });
+    $('board-clear').addEventListener('click', () => {
+      if (!strokes.size) return;
+      askToConfirm({
+        title: 'Išvalyti lentą?',
+        text: 'Lenta bus išvalyta visiems susitikimo dalyviams.',
+        ok: 'Išvalyti',
+        run: async () => {
+          clearBoard(true);
+          return { ok: true };
+        },
+      });
+    });
+    // Saves the board as a picture on this computer (nothing is uploaded).
+    $('board-save').addEventListener('click', () => {
+      const c = document.createElement('canvas');
+      c.width = BOARD_W;
+      c.height = BOARD_H;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, BOARD_W, BOARD_H);
+      strokes.forEach((s) => drawStroke(ctx, s));
+      const d = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      const a = document.createElement('a');
+      a.download = `mokify-lenta-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.png`;
+      a.href = c.toDataURL('image/png');
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    });
+  }
+
   // --- Leaving ---------------------------------------------------------------
 
   const leaveDialog = $('leave-dialog');
@@ -2330,6 +2741,7 @@ function initMeetings() {
     if (selfTile) selfTile.el.remove();
     selfTile = null;
     spotTile = null;
+    resetBoard();
     knocking = [];
     knocksEl.replaceChildren();
     chatList.replaceChildren();
