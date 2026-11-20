@@ -2337,8 +2337,14 @@ function initMeetings() {
   // in later gets the whole board from the others.
   const BOARD_W = 1600;
   const BOARD_H = 1000;
-  const BOARD_COLORS = ['#201E1B', '#2B4C8C', '#C0392B', '#2E7D4F'];
+  // Colour 4 is the eraser: a line in the board's own white, so erasing
+  // works just like drawing (anywhere you drag, it rubs out), syncs the same
+  // way, and "undo" brings back what was erased.
+  const BOARD_COLORS = ['#201E1B', '#2B4C8C', '#C0392B', '#2E7D4F', '#FFFFFF'];
+  const BOARD_ERASER = 4;
   const BOARD_SIZES = [3, 9];
+  const ERASER_SIZES = [22, 56];
+  const lineWidth = (s) => (s.c === BOARD_ERASER ? ERASER_SIZES[s.w] : BOARD_SIZES[s.w]);
   const BOARD_MAX_STROKES = 3000;
   const BOARD_MAX_NUMBERS = 8000; // 4000 points per line
   const BOARD_CHUNK = 600; // numbers per message
@@ -2384,7 +2390,7 @@ function initMeetings() {
     const p = s.p;
     if (p.length < 2) return;
     ctx.strokeStyle = BOARD_COLORS[s.c];
-    ctx.lineWidth = BOARD_SIZES[s.w];
+    ctx.lineWidth = lineWidth(s);
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.beginPath();
@@ -2482,33 +2488,6 @@ function initMeetings() {
     ];
   }
 
-  // Distance from point (px, py) to the segment a–b.
-  function segmentDistance(px, py, ax, ay, bx, by) {
-    const dx = bx - ax;
-    const dy = by - ay;
-    const len = dx * dx + dy * dy;
-    const t = len ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len)) : 0;
-    return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
-  }
-
-  // The eraser takes away whole lines it touches, for everyone.
-  function eraseAt(x, y) {
-    const hit = [];
-    strokes.forEach((s) => {
-      const reach = 14 + BOARD_SIZES[s.w] / 2;
-      const p = s.p;
-      for (let i = 0; i < p.length; i += 2) {
-        const bx = i + 2 < p.length ? p[i + 2] : p[i];
-        const by = i + 2 < p.length ? p[i + 3] : p[i + 1];
-        if (segmentDistance(x, y, p[i], p[i + 1], bx, by) <= reach) {
-          hit.push(s.id);
-          break;
-        }
-      }
-    });
-    if (hit.length) removeStrokes(hit, true);
-  }
-
   function removeStrokes(ids, tell) {
     ids.forEach((id) => strokes.delete(id));
     myStrokes = myStrokes.filter((id) => strokes.has(id));
@@ -2534,16 +2513,12 @@ function initMeetings() {
         // The pointer is already gone; drawing still works without it.
       }
       const [x, y] = boardPoint(e);
-      if (boardTool === 'eraser') {
-        drawing = { erasing: true };
-        eraseAt(x, y);
-        return;
-      }
       if (strokes.size >= BOARD_MAX_STROKES) {
         toast('Lenta pilna. Išvalyk ją, kad galėtum piešti toliau.');
         return;
       }
-      const stroke = { id: newStrokeId(), mine: true, c: boardColor, w: boardSize, p: [x, y] };
+      const color = boardTool === 'eraser' ? BOARD_ERASER : boardColor;
+      const stroke = { id: newStrokeId(), mine: true, c: color, w: boardSize, p: [x, y] };
       strokes.set(stroke.id, stroke);
       myStrokes.push(stroke.id);
       drawing = { stroke, sent: false, pending: [x, y] };
@@ -2555,10 +2530,6 @@ function initMeetings() {
       const events = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : [e];
       (events.length ? events : [e]).forEach((ev) => {
         const [x, y] = boardPoint(ev);
-        if (drawing.erasing) {
-          eraseAt(x, y);
-          return;
-        }
         const p = drawing.stroke.p;
         if (Math.hypot(x - p[p.length - 2], y - p[p.length - 1]) < 2 || p.length >= BOARD_MAX_NUMBERS) return;
         p.push(x, y);
@@ -2569,7 +2540,7 @@ function initMeetings() {
     });
     const endLine = () => {
       if (!drawing) return;
-      if (!drawing.erasing) flushDrawing();
+      flushDrawing();
       drawing = null;
     };
     boardCanvas.addEventListener('pointerup', endLine);
@@ -2594,7 +2565,7 @@ function initMeetings() {
     }
     if (!m || typeof m !== 'object') return;
     if (m.t === 's') {
-      if (!validId(m.id) || ![0, 1, 2, 3].includes(m.c) || ![0, 1].includes(m.w) || !validPoints(m.p) || !m.p.length) return;
+      if (!validId(m.id) || ![0, 1, 2, 3, BOARD_ERASER].includes(m.c) || ![0, 1].includes(m.w) || !validPoints(m.p) || !m.p.length) return;
       if (strokes.has(m.id) || strokes.size >= BOARD_MAX_STROKES) return;
       const s = { id: m.id, mine: false, c: m.c, w: m.w, p: m.p.slice() };
       strokes.set(s.id, s);
@@ -2668,10 +2639,10 @@ function initMeetings() {
       pressOnly(colorButtons, b);
       choosePen();
     }));
+    // The size is for the pen and the eraser alike.
     sizeButtons.forEach((b) => b.addEventListener('click', () => {
       boardSize = Number(b.dataset.size);
       pressOnly(sizeButtons, b);
-      choosePen();
     }));
     $('board-undo').addEventListener('click', () => {
       const id = myStrokes[myStrokes.length - 1];
