@@ -2818,8 +2818,7 @@ textarea.field-control { min-height: 96px; resize: vertical; line-height: 1.5; }
    it fits without scrolling. Points and social hours on the left, the
    certificate in the middle, the rating on the right (a student without
    social hours: points left, rating right). */
-.meet-done.has-rewards { max-width: 1100px; gap: var(--space-4); }
-@media (min-width: 900px) { .meet-done.has-rewards { padding-block: var(--space-5); } }
+@media (min-width: 900px) { .meet-done.has-rewards { max-width: 1100px; gap: var(--space-4); padding-block: var(--space-5); } }
 @media (min-width: 900px) {
   .rewards--lesson { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.15fr); grid-template-rows: auto 1fr; align-items: start; }
   .rewards--lesson > .reward { grid-column: 1; }
