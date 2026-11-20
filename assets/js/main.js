@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initSchoolsPage();
   initVerifyPage();
   initLeaderboardPage();
+  initSettingsPage();
   initNotifications();
 });
 
@@ -5581,19 +5582,40 @@ function initLeaderboardPage() {
   load(true);
 }
 
-// paskyra.html: "Rodyti mane viešoje lyderių lentelėje". Saved as soon as it
-// changes; hidden students are left out of lyderiai.html completely
-// (supabase/updates/2026-11-28-leaderboard-hide.sql). No database answer
-// yet: no switch.
+// nustatymai.html (settings): the privacy settings, each saved as soon as it
+// changes. The two functions below resolve to true when their setting could
+// be shown (false: the database answer is missing).
+function initSettingsPage() {
+  const page = document.getElementById('settings');
+  if (!page) return;
+  if (!readSession()) {
+    window.location.replace('prisijungti.html?next=nustatymai.html');
+    return;
+  }
+  const status = document.getElementById('settings-status');
+  getSession().then(async (session) => {
+    if (!session) {
+      if (!readSession()) window.location.replace('prisijungti.html?next=nustatymai.html');
+      else status.textContent = NETWORK_FAILED_MSG;
+      return;
+    }
+    const shown = await Promise.all([initLeaderboardToggle(session), initMessagePrivacy(session)]);
+    if (shown.some(Boolean)) status.hidden = true;
+    else status.textContent = 'Nepavyko įkelti nustatymų. Pabandyk dar kartą vėliau.';
+  });
+}
+
+// "Rodyti mane viešoje lyderių lentelėje". Hidden students are left out of
+// lyderiai.html completely (supabase/updates/2026-11-28-leaderboard-hide.sql).
 async function initLeaderboardToggle(session) {
   const row = document.getElementById('account-lb-row');
   const box = document.getElementById('account-lb-show');
-  if (!row || !box) return;
+  if (!row || !box) return false;
   const res = await callApi('/rest/v1/rpc/my_leaderboard_hidden', { body: {}, token: session.access_token });
-  if (!res.ok || !res.data || res.data.ok !== true) return;
+  if (!res.ok || !res.data || res.data.ok !== true) return false;
   box.checked = !res.data.hidden;
   row.hidden = false;
-  const error = document.getElementById('account-error');
+  const error = document.getElementById('settings-error');
   box.addEventListener('change', async () => {
     const show = box.checked;
     box.disabled = true;
@@ -5608,21 +5630,21 @@ async function initLeaderboardToggle(session) {
       showBanner(error, saved.status === 0 ? NETWORK_FAILED_MSG : 'Nepavyko išsaugoti. Pabandyk dar kartą.');
     }
   });
+  return true;
 }
 
-// paskyra.html: who may start a chat with the student ('teachers': only
-// from the teacher list, as before; 'everyone': anyone can find them by
-// username). Saved as soon as it changes; no database answer yet: hidden.
+// Who may start a chat with the student ('teachers': only from the teacher
+// list; 'everyone': anyone can find them by username).
 async function initMessagePrivacy(session) {
   const box = document.getElementById('account-privacy');
-  if (!box) return;
+  if (!box) return false;
   const res = await callApi('/rest/v1/rpc/my_message_privacy', { body: {}, token: session.access_token });
-  if (!res.ok || !res.data || res.data.ok !== true) return;
+  if (!res.ok || !res.data || res.data.ok !== true) return false;
   const radios = [...box.querySelectorAll('input[name="messages-from"]')];
   let saved = res.data.messages_from === 'everyone' ? 'everyone' : 'teachers';
   radios.forEach((r) => { r.checked = r.value === saved; });
   box.hidden = false;
-  const error = document.getElementById('account-error');
+  const error = document.getElementById('settings-error');
   radios.forEach((radio) => radio.addEventListener('change', async () => {
     if (!radio.checked) return;
     radios.forEach((r) => { r.disabled = true; });
@@ -5639,6 +5661,7 @@ async function initMessagePrivacy(session) {
       showBanner(error, result.status === 0 ? NETWORK_FAILED_MSG : 'Nepavyko išsaugoti. Pabandyk dar kartą.');
     }
   }));
+  return true;
 }
 
 // paskyra.html: the points star beside the name, and for teachers (or anyone
@@ -5654,8 +5677,6 @@ async function initAccountRewards(session, isTeacher) {
     slot.replaceChildren(buildPointsBadge(points.total));
     slot.hidden = false;
   }
-  initLeaderboardToggle(session);
-  initMessagePrivacy(session);
   const items = hours && Array.isArray(hours.items) ? hours.items : [];
   if (hours && (isTeacher || items.length)) {
     document.getElementById('account-hours').textContent = `${formatHours(hours.minutes)} val.`;
