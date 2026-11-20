@@ -649,6 +649,7 @@ function initMeetings() {
 
   function stopMeters() {
     [...meters.keys()].forEach(unwatchVoice);
+    dropSoundMeter();
     window.clearInterval(meterTimer);
     meterTimer = null;
     if (audioContext) audioContext.close().catch(() => {});
@@ -2563,6 +2564,105 @@ function initMeetings() {
   }
   if (lessonMode && timeBox) window.setInterval(timeTick, 1000);
 
+  // --- Sound during a lesson (supabase/updates/2026-12-01-lesson-sound.sql) ---
+  // Every quarter second: does this student's microphone pick up any sound?
+  // It is measured on the real microphone, so an unplugged or wrong
+  // microphone counts as silence even when the site shows it as on; muted
+  // sends nothing, so it counts as silence too. Every 30 seconds only yes or
+  // no goes to the database, never anything that was said. The camera is not
+  // checked. A lesson only counts when there was sound in most of it.
+  const SOUND_LEVEL = 0.02; // loudness (0-1) that counts as sound
+  const SOUND_REPORT_MS = 30000;
+  const SOUND_MIN_WINDOWS = 6; // 1.5 s of sound in 30 s
+  let soundMeter = null; // { track, source, analyser, samples }
+  let soundWindows = 0;
+  let soundReportAt = 0;
+  let silentReports = 0;
+  let silenceWarnedAt = 0;
+
+  function dropSoundMeter() {
+    if (!soundMeter) return;
+    try {
+      soundMeter.source.disconnect();
+    } catch {
+      // Already gone.
+    }
+    soundMeter = null;
+  }
+
+  function soundAnalyser() {
+    const track = media.mic;
+    if (!track || track.readyState !== 'live') {
+      dropSoundMeter();
+      return null;
+    }
+    if (soundMeter && soundMeter.track === track) return soundMeter;
+    dropSoundMeter();
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return null;
+    try {
+      audioContext = audioContext || new AudioContextClass();
+      const source = audioContext.createMediaStreamSource(new MediaStream([track]));
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 1024;
+      source.connect(analyser);
+      soundMeter = { track, source, analyser, samples: new Uint8Array(analyser.fftSize) };
+      return soundMeter;
+    } catch {
+      return null;
+    }
+  }
+
+  function soundTick() {
+    if (!lessonMode || phase !== 'call' || !lesson) {
+      soundReportAt = 0;
+      soundWindows = 0;
+      return;
+    }
+    const now = Date.now();
+    if (!soundReportAt) soundReportAt = now + SOUND_REPORT_MS;
+    if (media.micOn) {
+      const meter = soundAnalyser();
+      if (meter) {
+        if (audioContext.state === 'suspended') audioContext.resume().catch(() => {});
+        meter.analyser.getByteTimeDomainData(meter.samples);
+        let sum = 0;
+        for (let i = 0; i < meter.samples.length; i += 1) {
+          const v = (meter.samples[i] - 128) / 128;
+          sum += v * v;
+        }
+        if (Math.sqrt(sum / meter.samples.length) > SOUND_LEVEL) soundWindows += 1;
+      }
+    }
+    if (now < soundReportAt) return;
+    const had = soundWindows >= SOUND_MIN_WINDOWS;
+    soundWindows = 0;
+    soundReportAt = now + SOUND_REPORT_MS;
+    meetingRpc('lesson_sound_report', { p_lesson: lessonId, p_sound: had });
+    // Silent for 3 minutes while the lesson's time runs: say so (at most
+    // every 5 minutes), so a dead or wrong microphone is noticed in time.
+    silentReports = had ? 0 : silentReports + 1;
+    const clock = now + lesson.offset;
+    const running = lesson.endsAt && clock < lesson.endsAt;
+    if (running && silentReports >= 6 && now - silenceWarnedAt > 5 * 60000) {
+      silenceWarnedAt = now;
+      toast(media.micOn
+        ? 'Tavo mikrofonas jau 3 minutes negirdi jokio garso. Patikrink nustatymuose, ar pasirinktas tinkamas mikrofonas: pamoka užskaitoma tik tada, kai kalbatės.'
+        : 'Tavo mikrofonas išjungtas jau 3 minutes. Pamoka užskaitoma tik tada, kai kalbatės.', 10000);
+    }
+  }
+  if (lessonMode) window.setInterval(soundTick, 250);
+
+  // A lesson that wasn't counted because it was too quiet: its last screen.
+  async function quietEnding() {
+    const res = await meetingRpc('lesson_quiet', { p_lesson: lessonId });
+    if (!res.ok || res.quiet !== true) return null;
+    return {
+      title: 'Pamoka neužskaityta',
+      text: 'Didžiąją pamokos dalį mikrofonuose nebuvo girdėti jokio garso, todėl taškai ir socialinės valandos už ją neskiriami. Pamoka užskaitoma, kai bent pusę jos laiko girdėti kalba ir kalba abu.',
+    };
+  }
+
   if (lateCancel) {
     lateCancel.addEventListener('click', () => askToConfirm({
       title: 'Atšaukti pamoką?',
@@ -2604,6 +2704,13 @@ function initMeetings() {
         lateDialog.showModal();
       }
       return;
+    }
+    if (res.error === 'over') {
+      const quiet = await quietEnding();
+      if (quiet) {
+        finish('ended', { ending: quiet });
+        return;
+      }
     }
     finish('ended');
   }
@@ -2657,6 +2764,10 @@ function initMeetings() {
     else if (res.error === 'over' || res.error === 'ended') {
       const points = Number(res.points) || 0;
       message = points ? `Ši pamoka jau baigėsi. Už ją gavai ${points} ${pluralLt(points, 'tašką', 'taškus', 'taškų')}.` : 'Ši pamoka jau baigėsi.';
+      if (res.error === 'over' && !points) {
+        const quiet = await quietEnding();
+        if (quiet) message = `Ši pamoka jau baigėsi ir buvo neužskaityta: ${quiet.text.charAt(0).toLowerCase()}${quiet.text.slice(1)}`;
+      }
     }
     else if (res.error === 'cancelled') message = 'Ši pamoka atšaukta.';
     else if (res.error === 'not_agreed') message = 'Dėl šios pamokos laiko dar nesusitarta.';
