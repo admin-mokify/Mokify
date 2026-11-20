@@ -274,7 +274,7 @@ function initMeetings() {
     const meta = document.createElement('p');
     meta.className = 'meet-mine-meta text-muted';
     const inside = m.present ? `, dabar jame ${m.present} ${pluralLt(m.present, 'dalyvis', 'dalyviai', 'dalyvių')}` : '';
-    meta.textContent = `Sukurtas ${formatChatTime(m.created_at)}${inside}`;
+    meta.textContent = `${m.public ? 'Viešas' : 'Privatus'}, sukurtas ${formatChatTime(m.created_at)}${inside}`;
     text.append(title, meta);
 
     const actions = document.createElement('div');
@@ -334,7 +334,10 @@ function initMeetings() {
       showBanner(homeError, '');
       const tab = openTab();
       setBusy(createBtn, true, 'Kuriama…');
-      const res = await meetingRpc('meeting_create', { p_title: createForm.elements.title.value });
+      const args = { p_title: createForm.elements.title.value };
+      // Private is the default, so it isn't sent.
+      if (createForm.elements.access.value === 'public') args.p_public = true;
+      const res = await meetingRpc('meeting_create', args);
       setBusy(createBtn, false);
       if (!res.ok || !MEET_CODE_PATTERN.test(res.code || '')) {
         if (tab) tab.close();
@@ -977,8 +980,8 @@ function initMeetings() {
       return;
     }
     // The organizer, and anyone they already let in, walks straight in.
-    // So do both students of a lesson.
-    const walksIn = lessonMode || res.mine || (res.was_inside && (res.status === 'admitted' || res.status === 'left'));
+    // So do both students of a lesson, and anyone in a public meeting.
+    const walksIn = lessonMode || res.mine || res.public === true || (res.was_inside && (res.status === 'admitted' || res.status === 'left'));
     if (!walksIn && res.locked) {
       showBanner(lobbyError, MEET_ERRORS.locked);
       return;

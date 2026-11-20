@@ -72,6 +72,23 @@
                 <label class="field-label" for="meet-title">Pavadinimas (nebūtina)</label>
                 <input class="field-control" type="text" id="meet-title" name="title" maxlength="80" autocomplete="off" placeholder="Ruošiamės matematikos kontroliniam">
               </div>
+              <fieldset class="meet-access">
+                <legend class="field-label">Kas gali prisijungti?</legend>
+                <label class="meet-access-option">
+                  <input type="radio" name="access" value="private" checked>
+                  <span class="meet-access-text">
+                    <span class="meet-access-name">Privatus</span>
+                    <span class="meet-access-about">Norintys prisijungti išsiunčia prašymą, o tu nusprendi, ką įleisti.</span>
+                  </span>
+                </label>
+                <label class="meet-access-option">
+                  <input type="radio" name="access" value="public">
+                  <span class="meet-access-text">
+                    <span class="meet-access-name">Viešas</span>
+                    <span class="meet-access-about">Bet kas, turintis nuorodą ar kodą, prisijungia iš karto, be tavo leidimo.</span>
+                  </span>
+                </label>
+              </fieldset>
               <button type="submit" class="btn btn-primary" id="meet-create">Sukurti susitikimą</button>
             </form>
 
