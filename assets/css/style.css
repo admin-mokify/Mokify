@@ -913,6 +913,29 @@ h3, .h3 {
 .footer-cols ul { display: flex; flex-direction: column; gap: var(--space-2); }
 .footer-cols a:hover { color: var(--pen-blue); }
 
+.auth-terms { font-size: 0.88rem; line-height: 1.5; }
+.auth-terms a { color: var(--pen-blue); text-decoration: underline; }
+
+/* Legal pages (privatumas, taisykles, slapukai) linked under the footer. */
+.footer-legal { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); }
+.footer-legal a:hover { color: var(--pen-blue); }
+
+.legal { max-width: 760px; }
+.legal h1 { font-size: clamp(2rem, 2vw + 1.4rem, 2.8rem); line-height: 1.1; }
+.legal-updated { margin-top: var(--space-3); color: var(--text-muted); font-size: 0.92rem; }
+.legal h2 { margin-top: var(--space-7); font-size: clamp(1.3rem, 0.6vw + 1.1rem, 1.6rem); }
+.legal h3 { margin-top: var(--space-5); font-size: 1.1rem; }
+.legal p, .legal li { line-height: 1.65; }
+.legal p { margin-top: var(--space-3); }
+.legal ul { margin: var(--space-3) 0 0; padding-left: 1.3rem; display: grid; gap: var(--space-2); list-style: disc; }
+.legal li::marker { color: var(--ink-500); }
+.legal a { color: var(--pen-blue); text-decoration: underline; }
+.legal-table { width: 100%; margin-top: var(--space-4); border-collapse: collapse; font-size: 0.95rem; }
+.legal-table th, .legal-table td { padding: var(--space-2) var(--space-3); border: 1px solid rgba(32, 30, 27, 0.18); text-align: left; vertical-align: top; }
+.legal-table th { background: var(--paper-raised); font-weight: 600; }
+.legal-table-wrap { overflow-x: auto; }
+.legal-table code { font-size: 0.88em; overflow-wrap: anywhere; }
+
 .footer-bottom {
   margin-top: var(--space-7);
   padding-top: var(--space-5);
