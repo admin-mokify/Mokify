@@ -2,10 +2,12 @@
 // (susitikimai.html, pamoka.html): POST /api/youtube { code, url }.
 //
 // This file runs on Cloudflare's servers, not in the browser. It asks
-// YouTube's own records (YouTube Data API) which category the video's creator
-// put it in, and only educational categories are allowed. The page that shows
-// a video and every page that receives it ask here first, so nobody can push a
-// different video by tinkering with their own browser.
+// YouTube's own records (YouTube Data API) about the video. In lessons (with
+// points and social hours) only educational categories are allowed; in
+// meetings any YouTube video is, as long as YouTube lets it play inside
+// other websites. The page that shows a video and every page that receives
+// it ask here first, so nobody can push a different video by tinkering with
+// their own browser.
 //
 // Setup (once):
 //  1. https://console.cloud.google.com -> create a project (any name, e.g.
@@ -81,11 +83,12 @@ const json = (body, status = 200) => new Response(JSON.stringify(body), {
   },
 });
 
-// YouTube's verdict on one video: { ok: true, id, title, channel, seconds }
-// or { ok: false, error, category? }. null when YouTube couldn't be asked.
-async function judge(id, env) {
+// What YouTube says about one video (remembered for a day):
+// { found, playable, age, live, category, title, channel, seconds }, or null
+// when YouTube couldn't be asked.
+async function facts(id, env) {
   const cache = typeof caches !== 'undefined' ? caches.default : null;
-  const key = `https://youtube-check.mokify.invalid/v1/${id}`;
+  const key = `https://youtube-check.mokify.invalid/v2/${id}`;
   if (cache) {
     try {
       const hit = await cache.match(key);
@@ -103,36 +106,40 @@ async function judge(id, env) {
     return null;
   }
   const video = answer && Array.isArray(answer.items) ? answer.items[0] : null;
-  let verdict;
-  if (!video || !video.snippet || !video.status) {
-    verdict = { ok: false, error: 'not_found' };
-  } else if (!['public', 'unlisted'].includes(video.status.privacyStatus) || video.status.embeddable === false) {
-    verdict = { ok: false, error: 'not_embeddable' };
-  } else if (video.contentDetails && video.contentDetails.contentRating && video.contentDetails.contentRating.ytRating === 'ytAgeRestricted') {
-    verdict = { ok: false, error: 'age' };
-  } else if (!ALLOWED_CATEGORIES.has(String(video.snippet.categoryId))) {
-    verdict = { ok: false, error: 'category', category: CATEGORY_NAMES[video.snippet.categoryId] || 'kita' };
-  } else if (video.snippet.liveBroadcastContent && video.snippet.liveBroadcastContent !== 'none') {
-    verdict = { ok: false, error: 'live' };
-  } else {
-    verdict = {
-      ok: true,
-      id,
-      title: String(video.snippet.title || '').slice(0, 200),
-      channel: String(video.snippet.channelTitle || '').slice(0, 100),
-      seconds: seconds(video.contentDetails && video.contentDetails.duration),
-    };
-  }
+  const found = Boolean(video && video.snippet && video.status);
+  const info = !found ? { found: false } : {
+    found: true,
+    playable: ['public', 'unlisted'].includes(video.status.privacyStatus) && video.status.embeddable !== false,
+    age: Boolean(video.contentDetails && video.contentDetails.contentRating && video.contentDetails.contentRating.ytRating === 'ytAgeRestricted'),
+    live: Boolean(video.snippet.liveBroadcastContent && video.snippet.liveBroadcastContent !== 'none'),
+    category: String(video.snippet.categoryId || ''),
+    title: String(video.snippet.title || '').slice(0, 200),
+    channel: String(video.snippet.channelTitle || '').slice(0, 100),
+    seconds: seconds(video.contentDetails && video.contentDetails.duration),
+  };
   if (cache) {
     try {
-      await cache.put(key, new Response(JSON.stringify(verdict), {
+      await cache.put(key, new Response(JSON.stringify(info), {
         headers: { 'Content-Type': 'application/json', 'Cache-Control': `max-age=${CACHE_SECONDS}` },
       }));
     } catch {
       // Not cached: asked again next time.
     }
   }
-  return verdict;
+  return info;
+}
+
+// The rule for this call: { ok: true, id, title, channel, seconds } or
+// { ok: false, error, category? }. Lessons: educational categories only, no
+// live streams. Meetings: anything YouTube lets play inside other websites.
+// Age-restricted videos never (YouTube doesn't play them there anyway).
+function decide(id, f, lesson) {
+  if (!f.found) return { ok: false, error: 'not_found' };
+  if (!f.playable) return { ok: false, error: 'not_embeddable' };
+  if (f.age) return { ok: false, error: 'age' };
+  if (lesson && !ALLOWED_CATEGORIES.has(f.category)) return { ok: false, error: 'category', category: CATEGORY_NAMES[f.category] || 'kita' };
+  if (lesson && f.live) return { ok: false, error: 'live' };
+  return { ok: true, id, title: f.title, channel: f.channel, seconds: f.seconds };
 }
 
 export async function onRequestPost({ request, env }) {
@@ -173,9 +180,11 @@ export async function onRequestPost({ request, env }) {
   if (!ticket || ticket.ok !== true) return json({ ok: false, error: ticket && ticket.error === 'limit' ? 'limit' : 'forbidden' }, 403);
 
   if (!env.YOUTUBE_API_KEY) return json({ ok: false, error: 'not_set_up' });
-  const verdict = await judge(id, env);
-  if (!verdict) return json({ ok: false, error: 'unavailable' }, 502);
-  return json(verdict);
+  const info = await facts(id, env);
+  if (!info) return json({ ok: false, error: 'unavailable' }, 502);
+  // A lesson unless the database says it's a meeting (so before
+  // 2026-12-03-meeting-videos-any.sql is run, the stricter rule applies).
+  return json(decide(id, info, ticket.lesson !== false));
 }
 
 // Whether the key is set up and YouTube accepts it, tested on one fixed public
@@ -184,11 +193,12 @@ export async function onRequestPost({ request, env }) {
 const SELF_TEST_VIDEO = 'M7lc1UVf-VE';
 export async function onRequestGet({ env }) {
   if (!env.YOUTUBE_API_KEY) return json({ videos: false });
-  const verdict = await judge(SELF_TEST_VIDEO, env);
+  const info = await facts(SELF_TEST_VIDEO, env);
+  const verdict = info && decide(SELF_TEST_VIDEO, info, true);
   return json({
     videos: true,
-    keyWorks: Boolean(verdict),
-    testVideo: verdict ? (verdict.ok ? 'allowed' : `refused (${verdict.error}${verdict.category ? `: ${verdict.category}` : ''})`) : null,
+    keyWorks: Boolean(info),
+    testVideo: verdict ? (verdict.ok ? 'allowed in lessons' : `refused in lessons (${verdict.error}${verdict.category ? `: ${verdict.category}` : ''})`) : null,
   });
 }
 

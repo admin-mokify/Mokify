@@ -2824,21 +2824,34 @@ function initMeetings() {
     renderVideo();
   }
 
-  // Follows the others: jump to their moment, play or pause like them.
+  // Follows the others: play or pause like them, at their moment. A pause
+  // lands everyone on exactly the same frame (someone paused to show
+  // something); while playing, being a little apart is left alone.
   function followVideo() {
     if (!ytReady) return;
-    quietUntil = Date.now() + 1500;
+    quietUntil = Date.now() + 2500;
     const target = videoNow();
     const mine = ytTime + (ytState === 1 ? (Date.now() - ytTimeAt) / 1000 : 0);
-    if (Math.abs(mine - target) > 1.5) ytPost('seekTo', [target, true]);
-    ytPost(videoState.playing ? 'playVideo' : 'pauseVideo');
+    if (videoState.playing) {
+      if (Math.abs(mine - target) > 0.75) ytPost('seekTo', [target, true]);
+      ytPost('playVideo');
+    } else {
+      ytPost('pauseVideo');
+      if (Math.abs(mine - target) > 0.05) {
+        // On a video not started yet, jumping also starts it: pause again
+        // straight after, so it shows that frame and stays still.
+        ytPost('seekTo', [target, true]);
+        ytPost('pauseVideo');
+      }
+    }
   }
+  let pauseFix = false; // after pausing here: send the exact frame once known
 
   // This student played, paused or jumped: tell everyone.
   function shareVideoState(playing, time) {
     if (!video) return;
     videoState = { playing, time, at: Date.now() };
-    boardSend({ t: 'v-state', id: video.id, playing, time: Math.round(time * 10) / 10 });
+    boardSend({ t: 'v-state', id: video.id, playing, time: Math.round(time * 100) / 100 });
   }
 
   window.addEventListener('message', (e) => {
@@ -2872,20 +2885,35 @@ function initMeetings() {
         ytTime = info.currentTime;
         ytTimeAt = Date.now();
         if (jumped && !quiet && (ytState === 1 || ytState === 2)) shareVideoState(ytState === 1, ytTime);
+        // The exact frame this student paused on: correct what was sent.
+        if (pauseFix && ytState === 2 && typeof info.playerState !== 'number') {
+          pauseFix = false;
+          if (video && !videoState.playing && Math.abs(ytTime - videoState.time) > 0.05) shareVideoState(false, ytTime);
+        }
       }
-      if (typeof info.playerState === 'number') stateChanged(info.playerState, quiet);
+      if (typeof info.playerState === 'number') stateChanged(info.playerState, quiet, typeof info.currentTime === 'number');
     } else if (d.event === 'onStateChange' && typeof info === 'number') {
       stateChanged(info, quiet);
     }
   });
 
-  function stateChanged(state, quiet) {
+  // exact: the same report also gave the time (otherwise it is worked out
+  // from the last one, and corrected when the player reports it).
+  function stateChanged(state, quiet, exact = false) {
     if (state === ytState) return;
+    const was = ytState;
+    const now = exact ? ytTime : ytTime + (was === 1 && ytTimeAt ? (Date.now() - ytTimeAt) / 1000 : 0);
     ytState = state;
     if (quiet) return;
     // 1 playing, 2 paused (3 loading, 0 ended, 5 ready: nothing to pass on).
-    if (state === 1 && !videoState.playing) shareVideoState(true, ytTime);
-    else if (state === 2 && videoState.playing) shareVideoState(false, ytTime);
+    if (state === 1 && !videoState.playing) shareVideoState(true, now);
+    else if (state === 2 && videoState.playing) {
+      shareVideoState(false, now);
+      if (!exact) {
+        pauseFix = true;
+        ytPost('getCurrentTime');
+      }
+    }
   }
 
   function renderVideo() {
