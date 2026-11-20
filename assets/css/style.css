@@ -1358,10 +1358,38 @@ select.field-control {
 .edit-button:focus-visible { box-shadow: var(--stamp-sm); transform: translate(-2px, -2px); outline: none; }
 .edit-button:disabled { opacity: 0.4; cursor: default; }
 .edit-button[hidden] { display: none; }
-/* The gear (settings) sits just left of the pencil. */
-.edit-button.settings-button { right: 52px; }
+/* Profile card corner: the pencil, then the gear; the points coin, larger,
+   just below them. The name and its titles get the rest of the width. */
+#profile-view #edit-profile { right: 52px; }
+.edit-button.settings-button { right: 0; }
+.account-points-corner { position: absolute; top: 58px; right: 14px; }
+.account-points-corner .points-badge { width: 70px; height: 70px; border-width: 2px; }
+.account-points-corner .points-badge-value { font-size: 1.45rem; }
+.account-points-corner .points-badge[data-digits="3"] .points-badge-value { font-size: 1.25rem; }
+.account-points-corner .points-badge[data-digits="4"] .points-badge-value { font-size: 1.05rem; }
+.account-points-corner .points-badge[data-digits="5"] .points-badge-value { font-size: 0.88rem; }
+.account-points-corner .points-badge[data-digits="6"] .points-badge-value { font-size: 0.74rem; }
 #profile-view .account-head { padding-right: 100px; }
-@media (min-width: 860px) { .account-panel #profile-view .account-head { padding-right: 96px; } }
+#profile-view .account-name-row { column-gap: var(--space-2); }
+/* Phones: the name goes under the picture, below the coin, so it can use the
+   full width. */
+@media (max-width: 599px) {
+  #profile-view .account-head { padding-right: 0; }
+  /* Smaller and higher, so a long name below the picture never runs under it. */
+  .account-points-corner { top: 50px; right: 4px; }
+  .account-points-corner .points-badge { width: 58px; height: 58px; }
+  .account-points-corner .points-badge-value { font-size: 1.2rem; }
+  .account-points-corner .points-badge[data-digits="3"] .points-badge-value { font-size: 1.05rem; }
+  .account-points-corner .points-badge[data-digits="4"] .points-badge-value { font-size: 0.88rem; }
+}
+/* Computers: a slightly smaller picture, name and stickers, so the titles fit
+   next to the name. */
+@media (min-width: 860px) {
+  .account-panel #profile-view .account-head { padding-right: 96px; gap: var(--space-4); }
+  .account-panel #profile-view .avatar-frame--lg { width: 96px; height: 96px; }
+  .account-panel #profile-view .account-title h1 { font-size: clamp(1.55rem, 0.6vw + 1.25rem, 1.85rem); }
+  #profile-view .account-name-row .teacher-mark { font-size: 0.84rem; padding: 0.1rem 0.5rem; }
+}
 
 /* Settings page (nustatymai.html). */
 .settings { max-width: 640px; margin-inline: auto; display: grid; gap: var(--space-4); }
@@ -2494,7 +2522,9 @@ textarea.field-control { min-height: 96px; resize: vertical; line-height: 1.5; }
    colour, with an optional icon. */
 .title-slot { display: contents; }
 .teacher-mark.title-mark { gap: 0.35rem; background: var(--title-bg); color: var(--title-fg); }
-.title-mark svg { width: 1em; height: 1em; flex-shrink: 0; }
+/* The handwritten font's letters sit higher than the middle of the line, so
+   the icon is lifted to line up with them (measured: 0.1em). */
+.title-mark svg { width: 1em; height: 1em; flex-shrink: 0; transform: translateY(-0.1em); }
 
 /* The titles window (vartotojai.html). */
 .titles-dialog { width: min(560px, calc(100vw - 32px)); }
